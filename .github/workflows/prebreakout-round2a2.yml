@@ -1,0 +1,42 @@
+name: Pre-Breakout Round 2A-2 Trajectory Discovery
+
+on:
+  push:
+    paths:
+      - 'research/round2a2_trajectory.py'
+      - '.github/workflows/prebreakout-round2a2.yml'
+  workflow_dispatch:
+
+jobs:
+  trajectory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Restore Binance archive cache
+        uses: actions/cache@v4
+        with:
+          path: research/cache/binance
+          key: binance-vision-v2-${{ runner.os }}-${{ hashFiles('research/config.json') }}
+          restore-keys: |
+            binance-vision-v2-${{ runner.os }}-
+      - run: pip install -r research/requirements.txt
+      - name: Run phase trajectory discovery
+        run: python research/round2a2_trajectory.py
+      - name: Show strongest contrasts
+        run: |
+          echo '--- trajectory summary ---'
+          head -30 research/results/round2a2/trajectory_summary.csv || true
+          echo '--- transition contrasts ---'
+          head -30 research/results/round2a2/transition_contrasts.csv || true
+          echo '--- robustness ---'
+          head -30 research/results/round2a2/prestart_robustness.csv || true
+      - name: Upload trajectory results
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebreakout-round2a2-trajectory-discovery
+          path: research/results/round2a2/
+          retention-days: 30
