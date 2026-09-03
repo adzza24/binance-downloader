@@ -1,0 +1,54 @@
+name: Pre-Breakout Round 2A Rally Discovery
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - 'research/round2a_discovery.py'
+      - 'research/binance_data.py'
+      - 'research/config.json'
+      - '.github/workflows/prebreakout-round2a.yml'
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUNBUFFERED: '1'
+  BINANCE_CACHE_DIR: research/cache/binance
+
+jobs:
+  discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: research/requirements.txt
+      - name: Restore Binance archive cache
+        uses: actions/cache@v4
+        with:
+          path: research/cache/binance
+          key: binance-1h-${{ runner.os }}-v1
+          restore-keys: |
+            binance-1h-${{ runner.os }}-
+      - run: pip install -r research/requirements.txt
+      - name: Run retrospective rally discovery
+        run: python research/round2a_discovery.py
+      - name: Show feature contrasts
+        if: always()
+        run: |
+          if [ -f research/results/round2a/feature_contrasts.csv ]; then
+            head -40 research/results/round2a/feature_contrasts.csv
+          fi
+      - name: Upload discovery results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebreakout-round2a-rally-discovery
+          path: research/results/round2a/*
+          if-no-files-found: warn
+          retention-days: 30
