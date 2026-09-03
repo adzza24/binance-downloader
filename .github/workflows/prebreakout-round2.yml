@@ -1,0 +1,63 @@
+name: Pre-Breakout Backtest - Round 2 Entry Filters
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - 'research/round2.py'
+      - 'research/round2_config.json'
+      - 'research/binance_data.py'
+      - '.github/workflows/prebreakout-round2.yml'
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUNBUFFERED: '1'
+  BINANCE_CACHE_DIR: research/cache/binance
+
+jobs:
+  round2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: research/requirements.txt
+
+      - name: Restore Binance archive cache
+        uses: actions/cache@v4
+        with:
+          path: research/cache/binance
+          key: binance-spot-1h-v1-${{ hashFiles('research/round2_config.json') }}
+          restore-keys: |
+            binance-spot-1h-v1-
+
+      - name: Install research dependencies
+        run: pip install -r research/requirements.txt
+
+      - name: Run Round 2 entry-filter research
+        run: python research/round2.py --config research/round2_config.json --out research/results/round_2
+
+      - name: Show Round 2 summary
+        if: always()
+        run: |
+          if [ -f research/results/round_2/backtest_summary_round2.csv ]; then
+            cat research/results/round_2/backtest_summary_round2.csv
+          fi
+
+      - name: Upload Round 2 research results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebreakout-round2-entry-filters
+          path: research/results/round_2/*
+          if-no-files-found: warn
+          retention-days: 30

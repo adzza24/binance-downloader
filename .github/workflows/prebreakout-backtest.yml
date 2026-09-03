@@ -1,12 +1,7 @@
-name: Pre-Breakout Exit Backtest
+name: Pre-Breakout Exit Backtest - Round 1 Baseline
 
 on:
   workflow_dispatch:
-  push:
-    branches: [master]
-    paths:
-      - 'research/**'
-      - '.github/workflows/prebreakout-backtest.yml'
 
 permissions:
   contents: read
@@ -33,20 +28,13 @@ jobs:
         run: pip install -r research/requirements.txt
 
       - name: Run historical exit backtest
-        run: python research/backtest.py --config research/config.json --out research/results
-
-      - name: Show summary
-        if: always()
-        run: |
-          if [ -f research/results/backtest_summary.csv ]; then
-            cat research/results/backtest_summary.csv
-          fi
+        run: python research/backtest.py --config research/config.json --out research/results/round_1_baseline
 
       - name: Upload research results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: prebreakout-backtest-results
-          path: research/results/*.csv
+          name: prebreakout-round1-baseline
+          path: research/results/round_1_baseline/*
           if-no-files-found: warn
           retention-days: 30
