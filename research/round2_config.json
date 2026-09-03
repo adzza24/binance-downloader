@@ -1,0 +1,61 @@
+{
+  "symbols": [
+    "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT",
+    "DOGEUSDT", "LINKUSDT", "AVAXUSDT", "DOTUSDT", "LTCUSDT", "BCHUSDT",
+    "TRXUSDT", "ATOMUSDT", "NEARUSDT", "APTUSDT", "ARBUSDT", "OPUSDT",
+    "INJUSDT", "SUIUSDT", "FETUSDT", "RUNEUSDT", "AAVEUSDT", "UNIUSDT",
+    "CRVUSDT", "CVXUSDT", "ZECUSDT", "AUCTIONUSDT", "WLDUSDT", "PEOPLEUSDT",
+    "COTIUSDT", "SUNUSDT", "GALAUSDT", "SANDUSDT", "MANAUSDT", "FILUSDT",
+    "ETCUSDT", "ICPUSDT", "ALGOUSDT", "VETUSDT"
+  ],
+  "start": "2019-01-01",
+  "end": "2026-08-31",
+  "interval": "1h",
+  "position_usdt": 300.0,
+  "fee_rate": 0.001,
+  "slippage_rate": 0.0005,
+  "max_holding_hours": 720,
+  "trigger": {
+    "impulse_lookback_hours": 720,
+    "impulse_exclude_recent_hours": 120,
+    "min_prior_impulse_pct": 0.12,
+    "base_hours": 120,
+    "max_base_range_pct": 0.14,
+    "max_distance_to_resistance_pct": 0.025,
+    "min_volume_contraction_ratio": 0.80,
+    "min_trigger_volume_ratio": 1.50,
+    "min_trade_count_ratio": 1.25,
+    "min_taker_buy_ratio": 0.50,
+    "min_relative_strength_72h": 0.0,
+    "cooldown_hours": 72
+  },
+  "round2": {
+    "activity": {
+      "min_volume_ratio": 1.50,
+      "max_volume_ratio": 4.00,
+      "min_trade_count_ratio": 1.25,
+      "max_trade_count_ratio": 4.00,
+      "min_taker_buy_ratio": 0.54,
+      "max_trigger_candle_return": 0.04,
+      "max_prior_impulse_pct": 0.80
+    },
+    "market": {
+      "model": "four_factor_btc_technical_score",
+      "min_score": 2,
+      "factors": [
+        "btc_close_above_200d_sma",
+        "btc_50d_sma_above_100d_sma",
+        "btc_200d_sma_above_20d_ago",
+        "btc_close_above_90d_range_midpoint"
+      ]
+    },
+    "eligibility": {
+      "warmup_days": 365,
+      "lookback_days": 730,
+      "min_resolved_setups": 8,
+      "min_net_pnl_usdt": 0.0,
+      "min_win_rate": 0.55,
+      "measurement": "prior structural-stop versus +5pct setup outcomes only"
+    }
+  }
+}
