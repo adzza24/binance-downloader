@@ -174,8 +174,8 @@ def process_symbol(symbol: str, btc: pd.DataFrame, cfg: dict):
     sigs=controlled_activity(symbol,x,cfg)
     rows=[]
     for sig in sigs:
-        for v in variants():
-            rows.append(simulate(df,sig,*v,cfg))
+        for kind, cap, activation, lock in variants():
+            rows.append(simulate(df, sig, kind, cap, cfg, activation, lock))
     return sigs,rows
 
 
