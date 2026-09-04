@@ -1,0 +1,54 @@
+name: Pre-Breakout Round 3B Trailing Research
+
+on:
+  push:
+    paths:
+      - 'research/round3b_trailing_research.py'
+      - '.github/workflows/prebreakout-round3b.yml'
+  workflow_dispatch:
+
+jobs:
+  round3b:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      PYTHONUNBUFFERED: '1'
+      BINANCE_CACHE_DIR: research/cache/binance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: research/requirements.txt
+      - name: Restore Binance archive cache
+        uses: actions/cache@v4
+        with:
+          path: research/cache/binance
+          key: binance-hourly-${{ runner.os }}-v1
+          restore-keys: |
+            binance-hourly-${{ runner.os }}-
+            binance-vision-v2-${{ runner.os }}-
+      - name: Install dependencies
+        run: pip install -r research/requirements.txt
+      - name: Run Round 3B
+        run: python research/round3b_trailing_research.py
+      - name: Show top variants
+        if: always()
+        run: |
+          if [ -f research/results/round3b/summary.csv ]; then
+            python - <<'PY'
+          import pandas as pd
+          p='research/results/round3b/summary.csv'
+          x=pd.read_csv(p).sort_values(['net_pnl_usdt','profit_factor'],ascending=False)
+          print(x.to_string(index=False))
+          PY
+          fi
+      - name: Upload Round 3B results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebreakout-round3b-trailing-research
+          path: research/results/round3b/*
+          if-no-files-found: warn
+          retention-days: 30
