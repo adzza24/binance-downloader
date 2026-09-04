@@ -1,0 +1,38 @@
+name: Pre-Breakout Round 2B Validation
+
+on:
+  push:
+    paths:
+      - 'research/round2b_validation.py'
+      - '.github/workflows/prebreakout-round2b.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Restore Binance archive cache
+        uses: actions/cache@v4
+        with:
+          path: research/cache/binance
+          key: binance-hourly-v2-${{ runner.os }}
+          restore-keys: |
+            binance-hourly-v2-${{ runner.os }}
+      - run: pip install -r research/requirements.txt
+      - name: Run Round 2B validation
+        env:
+          BINANCE_CACHE_DIR: research/cache/binance
+        run: python research/round2b_validation.py
+      - name: Show summary
+        run: cat research/results/round2b/summary.csv
+      - name: Upload validation results
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebreakout-round2b-validation
+          path: research/results/round2b/
+          retention-days: 30
