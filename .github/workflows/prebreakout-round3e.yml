@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'research/round3e_large_winner_exits.py'
+      - 'research/round3e_open_ended.py'
       - '.github/workflows/prebreakout-round3e.yml'
   workflow_dispatch:
 
@@ -31,16 +32,16 @@ jobs:
             binance-vision-v2-${{ runner.os }}-
       - name: Install dependencies
         run: pip install -r research/requirements.txt
-      - name: Run Round 3E
-        run: python research/round3e_large_winner_exits.py
+      - name: Run Round 3E open-ended
+        run: python research/round3e_open_ended.py
       - name: Show variants
         if: always()
         run: |
-          if [ -f research/results/round3e/summary.csv ]; then
+          if [ -f research/results/round3e_open/summary.csv ]; then
             python - <<'PY'
           import pandas as pd
-          p='research/results/round3e/summary.csv'
-          x=pd.read_csv(p).sort_values(['net_pnl_usdt','profit_factor'],ascending=False)
+          p='research/results/round3e_open/summary.csv'
+          x=pd.read_csv(p).sort_values(['total_mtm_pnl_usdt','realised_profit_factor'],ascending=False)
           print(x.to_string(index=False))
           PY
           fi
@@ -48,7 +49,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: prebreakout-round3e-large-winner-exits
-          path: research/results/round3e/*
+          name: prebreakout-round3e-open-ended
+          path: research/results/round3e_open/*
           if-no-files-found: warn
           retention-days: 30
