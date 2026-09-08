@@ -1,0 +1,48 @@
+name: Pre-Breakout Round 3I Early Stop Sensitivity
+
+on:
+  push:
+    paths:
+      - 'research/round3i_early_stop_sensitivity.py'
+      - '.github/workflows/prebreakout-round3i.yml'
+  workflow_dispatch:
+
+jobs:
+  round3i:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONUNBUFFERED: 1
+      BINANCE_CACHE_DIR: research/cache/binance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: research/requirements.txt
+      - name: Restore Binance archive cache
+        uses: actions/cache@v4
+        with:
+          path: research/cache/binance
+          key: binance-hourly-${{ runner.os }}-v1
+          restore-keys: |
+            binance-hourly-${{ runner.os }}-
+            binance-vision-v2-${{ runner.os }}-
+      - name: Install dependencies
+        run: pip install -r research/requirements.txt
+      - name: Run Round 3I
+        run: python research/round3i_early_stop_sensitivity.py
+      - name: Show results
+        run: |
+          echo 'FULL'
+          cat research/results/round3i/summary.csv
+          echo '2022+'
+          cat research/results/round3i/summary_2022_onward.csv
+          echo 'YEARLY'
+          cat research/results/round3i/year_summary.csv
+      - name: Upload Round 3I results
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebreakout-round3i-early-stop-sensitivity
+          path: research/results/round3i/*
+          retention-days: 30
