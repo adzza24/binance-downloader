@@ -1,0 +1,44 @@
+name: Pre-Breakout Round 4B Regime Confirmation
+
+on:
+  push:
+    paths:
+      - 'research/round4b_regime_confirmation.py'
+      - '.github/workflows/prebreakout-round4b.yml'
+  workflow_dispatch:
+
+jobs:
+  round4b:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONUNBUFFERED: 1
+      BINANCE_CACHE_DIR: research/cache/binance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: research/requirements.txt
+      - name: Restore Binance archive cache
+        uses: actions/cache@v4
+        with:
+          path: research/cache/binance
+          key: binance-hourly-${{ runner.os }}-v1
+          restore-keys: |
+            binance-hourly-${{ runner.os }}-
+            binance-vision-v2-${{ runner.os }}-
+      - name: Install dependencies
+        run: pip install -r research/requirements.txt
+      - name: Run Round 4B
+        run: python research/round4b_regime_confirmation.py
+      - name: Show results
+        run: |
+          cat research/results/round4b/summary.csv
+          cat research/results/round4b/bear_episodes.csv
+      - name: Upload Round 4B results
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebreakout-round4b-regime-confirmation
+          path: research/results/round4b/*
+          retention-days: 30
