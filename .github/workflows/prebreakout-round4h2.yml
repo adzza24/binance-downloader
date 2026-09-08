@@ -1,0 +1,35 @@
+name: Pre-Breakout Round 4H2 Causal Coin Tightening
+
+on:
+  push:
+    paths:
+      - 'research/round4h2_coin180_200_tightening_causal.py'
+      - '.github/workflows/prebreakout-round4h2.yml'
+  workflow_dispatch:
+
+jobs:
+  round4h2:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Restore Binance archive cache
+        uses: actions/cache@v4
+        with:
+          path: research/data
+          key: binance-research-data-v1
+      - name: Install dependencies
+        run: pip install pandas numpy requests
+      - name: Run Round 4H2 research
+        run: python research/round4h2_coin180_200_tightening_causal.py
+      - name: Show summary
+        run: cat research/results/round4h2/summary.csv
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebreakout-round4h2-causal-coin-tightening
+          path: research/results/round4h2/
+          retention-days: 90
