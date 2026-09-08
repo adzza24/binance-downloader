@@ -1,0 +1,44 @@
+name: Pre-Breakout Round 4E 180D Warning Trail
+
+on:
+  push:
+    paths:
+      - 'research/round4e_180d_warning_trail.py'
+      - '.github/workflows/prebreakout-round4e.yml'
+  workflow_dispatch:
+
+jobs:
+  round4e:
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONUNBUFFERED: 1
+      BINANCE_CACHE_DIR: research/cache/binance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: research/requirements.txt
+      - name: Restore Binance archive cache
+        uses: actions/cache@v4
+        with:
+          path: research/cache/binance
+          key: binance-hourly-${{ runner.os }}-v1
+          restore-keys: |
+            binance-hourly-${{ runner.os }}-
+            binance-vision-v2-${{ runner.os }}-
+      - name: Install dependencies
+        run: pip install -r research/requirements.txt
+      - name: Run Round 4E
+        run: python research/round4e_180d_warning_trail.py
+      - name: Show results
+        run: |
+          cat research/results/round4e/summary.csv
+          cat research/results/round4e/year_summary.csv
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebreakout-round4e-180d-warning-trail
+          path: research/results/round4e/*
+          retention-days: 30
