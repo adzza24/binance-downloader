@@ -9,7 +9,7 @@ on:
 
 jobs:
   round4g:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -19,12 +19,10 @@ jobs:
       - name: Restore Binance archive cache
         uses: actions/cache@v4
         with:
-          path: data
-          key: binance-data-${{ runner.os }}-${{ hashFiles('research/config.json') }}
-          restore-keys: |
-            binance-data-${{ runner.os }}-
+          path: research/data
+          key: binance-research-data-v1
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install pandas numpy requests
       - name: Run Round 4G research
         run: python research/round4g_coin_regime_actions.py
       - name: Show summary
