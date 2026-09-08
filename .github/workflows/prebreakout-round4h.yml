@@ -1,0 +1,39 @@
+name: Pre-Breakout Round 4H Coin 180 200 Tightening
+
+on:
+  push:
+    paths:
+      - 'research/round4h_coin180_200_tightening.py'
+      - '.github/workflows/prebreakout-round4h.yml'
+  workflow_dispatch:
+
+jobs:
+  round4h:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Restore Binance archive cache
+        uses: actions/cache@v4
+        with:
+          path: research/data
+          key: binance-research-data-v1
+      - name: Install dependencies
+        run: pip install pandas numpy requests
+      - name: Run Round 4H research
+        run: python research/round4h_coin180_200_tightening.py
+      - name: Show summary
+        run: |
+          echo '--- summary.csv ---'
+          cat research/results/round4h/summary.csv
+          echo '--- year_summary.csv ---'
+          cat research/results/round4h/year_summary.csv
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebreakout-round4h-coin180-200-tightening
+          path: research/results/round4h/
+          retention-days: 90
