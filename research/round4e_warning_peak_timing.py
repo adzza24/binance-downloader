@@ -9,7 +9,7 @@ import pandas as pd
 
 from binance_data import load_symbol
 from round2b_validation import add_live_features, controlled_activity
-from round4e_180d_warning_trail import build_states, simulate
+from round4e_180d_warning_trail import daily_states, simulate
 
 
 def process_symbol(symbol, btc, warn_daily, bear_daily, cfg):
@@ -26,7 +26,6 @@ def process_symbol(symbol, btc, warn_daily, bear_daily, cfg):
         entry_time = pd.Timestamp(sig['entry_time'])
         exit_time = pd.Timestamp(base['exit_time'])
         start = int(sig['entry_index'])
-        # First causal 180D warning while trade is alive.
         live = df.iloc[start:].copy()
         live = live[(pd.to_datetime(live.time, utc=True) >= entry_time) & (pd.to_datetime(live.time, utc=True) <= exit_time)]
         if live.empty:
@@ -36,7 +35,6 @@ def process_symbol(symbol, btc, warn_daily, bear_daily, cfg):
             continue
         first_warn_idx = np.flatnonzero(warn_mask.to_numpy())[0]
         first_warn_time = pd.Timestamp(live.iloc[first_warn_idx].time)
-        # Peak during the trade's actual lifetime.
         peak_i = int(np.argmax(live.high.astype(float).to_numpy()))
         peak_row = live.iloc[peak_i]
         peak_time = pd.Timestamp(peak_row.time)
@@ -45,12 +43,7 @@ def process_symbol(symbol, btc, warn_daily, bear_daily, cfg):
         peak_gain = peak_price / entry_price - 1.0
         warn_price = float(live.iloc[first_warn_idx].open)
         warn_gain = warn_price / entry_price - 1.0
-        exit_idx = len(live) - 1
-        exit_row = live.iloc[exit_idx]
-        exit_close = float(exit_row.close)
-        # Timing signs: positive means warning came AFTER peak (late); negative means warning came before peak.
         warn_minus_peak_days = (first_warn_time - peak_time).total_seconds() / 86400.0
-        # Find first time price had already achieved 80/90/95% of eventual peak PROFIT above entry.
         thresholds = {}
         for frac in (0.80, 0.90, 0.95):
             target = entry_price * (1.0 + peak_gain * frac)
@@ -73,7 +66,7 @@ def main():
     cfg = json.loads(Path('research/config.json').read_text())
     out = Path('research/results/round4e_peak_timing'); out.mkdir(parents=True, exist_ok=True)
     btc = load_symbol('BTCUSDT', cfg['interval'], cfg['start'], cfg['end'])
-    warn_daily, bear_daily = build_states(btc)
+    warn_daily, bear_daily = daily_states(btc)
     rows = []
     with ThreadPoolExecutor(max_workers=6) as ex:
         futs = {ex.submit(process_symbol, s, btc, warn_daily, bear_daily, cfg): s for s in cfg['symbols']}
