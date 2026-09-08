@@ -1,0 +1,38 @@
+name: Pre-Breakout Round 4F Breadth Coin Discovery
+
+on:
+  push:
+    paths:
+      - 'research/round4f_breadth_coin_warning_discovery.py'
+      - '.github/workflows/prebreakout-round4f.yml'
+  workflow_dispatch:
+
+jobs:
+  round4f:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Restore Binance archive cache
+        uses: actions/cache@v4
+        with:
+          path: research/data
+          key: binance-research-data-v1
+      - name: Install dependencies
+        run: pip install pandas numpy requests
+      - name: Run Round 4F discovery
+        run: python research/round4f_breadth_coin_warning_discovery.py
+      - name: Show key outputs
+        run: |
+          echo '--- coin warning summary ---'
+          cat research/results/round4f/coin_warning_summary.csv
+          echo '--- bear breadth lead diagnostics head ---'
+          head -20 research/results/round4f/bear_transition_breadth_leads.csv
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebreakout-round4f-breadth-coin-discovery
+          path: research/results/round4f/
+          retention-days: 90
