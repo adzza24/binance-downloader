@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from binance_data import load_symbol
-from round4_regime_gating import BASE_SCHEDULE, daily_close, symbol_work
+from round4_regime_gating import symbol_work
 
 START_CAPITAL = 1750.0
 BASE_SIZE = 300.0
@@ -43,7 +43,10 @@ def attach_features(trades: pd.DataFrame, features: pd.DataFrame) -> pd.DataFram
     rf = pd.DataFrame(rows, index=q.index)
     for c in rf.columns:
         q[c] = rf[c]
-    return q.dropna(subset=['dist220', 'slope220_30'])
+    # Preserve the complete frozen signal cohort. If a long MA has not warmed up yet,
+    # that variant simply cannot pause the trade (NaN state -> False) rather than
+    # silently deleting early signals from every comparator.
+    return q
 
 
 def state_series(features: pd.DataFrame, ma: int, slope_lb: int, mode: str) -> pd.Series:
@@ -86,7 +89,7 @@ def capital_sim(g: pd.DataFrame) -> dict:
     def settle_until(t):
         nonlocal cash, open_principal, peak, min_eq, max_dd
         while open_heap and open_heap[0][0] <= t:
-            et, principal, pnl = heapq.heappop(open_heap)
+            _, principal, pnl = heapq.heappop(open_heap)
             cash += principal + pnl
             open_principal -= principal
             eq = cash + open_principal
@@ -196,19 +199,14 @@ def episodes(s: pd.Series) -> pd.DataFrame:
 
 def warning_diagnostics(features: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     # Use one common 20d slope and AND state for cross-MA lead/escalation diagnostics.
-    states = {}
-    for ma in MA_LENGTHS:
-        states[ma] = confirmed_state(state_series(features, ma, 20, 'AND'), 3)
-
+    states = {ma: confirmed_state(state_series(features, ma, 20, 'AND'), 3) for ma in MA_LENGTHS}
     ep_rows = []
     for ma, s in states.items():
-        e = episodes(s)
-        for _, r in e.iterrows():
+        for _, r in episodes(s).iterrows():
             ep_rows.append({'ma': ma, **r.to_dict()})
     ep = pd.DataFrame(ep_rows)
 
-    long = states[200]
-    long_starts = list(episodes(long)['start']) if long.any() else []
+    long_starts = list(episodes(states[200])['start']) if states[200].any() else []
     warn_rows = []
     for ma in [50, 100, 150, 180, 220]:
         for _, r in episodes(states[ma]).iterrows():
@@ -216,43 +214,52 @@ def warning_diagnostics(features: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFr
             future = [x for x in long_starts if x >= start]
             next_long = future[0] if future else pd.NaT
             lead = (next_long - start).days if pd.notna(next_long) else np.nan
-            escalates_90 = bool(pd.notna(next_long) and 0 <= lead <= 90)
-            warn_rows.append({'ma': ma, 'warning_start': start, 'warning_days': r['days'], 'next_ma200_start': next_long, 'lead_days': lead, 'escalates_to_ma200_within_90d': escalates_90})
-    warn = pd.DataFrame(warn_rows)
-    return ep, warn
+            warn_rows.append({
+                'ma': ma,
+                'warning_start': start,
+                'warning_days': r['days'],
+                'next_ma200_start': next_long,
+                'lead_days': lead,
+                'escalates_to_ma200_within_90d': bool(pd.notna(next_long) and 0 <= lead <= 90),
+            })
+    return ep, pd.DataFrame(warn_rows)
 
 
 def forward_signal_returns(features: pd.DataFrame) -> pd.DataFrame:
-    # BTC forward returns are diagnostics only, never inputs to states.
-    raw_close = features['btc_close'].shift(-1)  # undo feature shift to recover same-day completed close approximately
+    # BTC forward returns are post-signal diagnostics only, never state inputs.
+    raw_close = features['btc_close'].shift(-1)
     rows = []
     for ma in MA_LENGTHS:
         state = confirmed_state(state_series(features, ma, 20, 'AND'), 3)
         starts = state & ~state.shift(1, fill_value=False)
         for d in features.index[starts]:
             row = {'ma': ma, 'signal_date': d}
+            loc = raw_close.index.get_loc(d)
             for h in FORWARD_HORIZONS:
-                if d in raw_close.index:
-                    loc = raw_close.index.get_loc(d)
-                    j = loc + h
-                    row[f'btc_fwd_{h}d'] = float(raw_close.iloc[j] / raw_close.iloc[loc] - 1) if j < len(raw_close) and pd.notna(raw_close.iloc[loc]) and pd.notna(raw_close.iloc[j]) else np.nan
+                j = loc + h
+                row[f'btc_fwd_{h}d'] = float(raw_close.iloc[j] / raw_close.iloc[loc] - 1) if j < len(raw_close) and pd.notna(raw_close.iloc[loc]) and pd.notna(raw_close.iloc[j]) else np.nan
             rows.append(row)
     return pd.DataFrame(rows)
 
 
 def cascade_diagnostics(features: pd.DataFrame, q: pd.DataFrame) -> pd.DataFrame:
-    # Descriptive risk ladder only: count how many MA horizons are in causal 3-day-confirmed AND deterioration.
+    # Descriptive risk ladder only: count simultaneous 3-day-confirmed AND deterioration states.
     st = pd.DataFrame(index=features.index)
     for ma in MA_LENGTHS:
         st[str(ma)] = confirmed_state(state_series(features, ma, 20, 'AND'), 3)
     st['count'] = st.sum(axis=1)
-    dates = q.entry_time.dt.floor('D')
-    counts = dates.map(st['count']).fillna(0).astype(int)
+    counts = q.entry_time.dt.floor('D').map(st['count']).fillna(0).astype(int)
     x = q.copy()
     x['cascade_count'] = counts.to_numpy()
     rows = []
     for c, g in x.groupby('cascade_count'):
-        rows.append({'cascade_count': int(c), 'signals': len(g), 'sum_pnl': float(g.pnl_usdt.sum()), 'mean_pnl': float(g.pnl_usdt.mean()), 'win_rate': float((g.pnl_usdt > 0).mean())})
+        rows.append({
+            'cascade_count': int(c),
+            'signals': len(g),
+            'sum_pnl': float(g.pnl_usdt.sum()),
+            'mean_pnl': float(g.pnl_usdt.mean()),
+            'win_rate': float((g.pnl_usdt > 0).mean()),
+        })
     return pd.DataFrame(rows)
 
 
@@ -277,13 +284,11 @@ def main():
                 print('ERROR', s, repr(e), flush=True)
 
     p = pd.concat(closes, axis=1).sort_index()
-    btc_daily = p['BTCUSDT']
-    features = build_ma_features(btc_daily)
+    features = build_ma_features(p['BTCUSDT'])
     q = attach_features(pd.DataFrame(all_t), features)
 
     summary = subperiod_summary(q, features)
     summary.to_csv(out / 'summary.csv', index=False)
-
     ep, warn = warning_diagnostics(features)
     ep.to_csv(out / 'ma_episodes.csv', index=False)
     warn.to_csv(out / 'warning_escalation.csv', index=False)
@@ -292,7 +297,6 @@ def main():
     features.to_csv(out / 'daily_ma_features.csv')
     q.to_csv(out / 'trades_with_ma_features.csv', index=False)
 
-    # Robustness ranking: reward performance and drawdown while penalising isolated optima.
     full = summary[summary.period == 'FULL'].copy()
     nonbase = full[full.variant != 'BASE'].copy()
     nonbase['pnl_rank'] = nonbase.combined_pnl.rank(pct=True)
@@ -305,16 +309,17 @@ def main():
         'study': 'Round 4C multi-horizon moving-average regime robustness and early-warning study',
         'scope': 'Entry gating only. Frozen Controlled Activity entries and Round 3H FIXED60 exits are unchanged. No regime-triggered exits are tested here.',
         'causality': 'All moving-average features are daily and shifted one full day before use. Confirmation requires consecutive causal daily states. No retrospective bull/bear labels are used in rule construction.',
+        'signal_cohort': 'All frozen Controlled Activity signals are preserved. Before a particular MA has sufficient history, that variant defaults to no pause rather than removing the trade from every comparator.',
         'ma_lengths': MA_LENGTHS,
         'slope_lookbacks': SLOPE_LOOKBACKS,
         'confirmation_days': CONFIRM_DAYS,
         'modes': MODES,
         'design_principle': 'Seek a stable plateau across nearby parameters, not the single highest-return variant.',
         'chronological_slices': ['FULL', 'EARLY_2019_2022', 'LATE_2023_2026', 'FORWARD_2025_2026'],
-        'warning_diagnostics': 'Shorter MAs are also analysed as possible early-warning signals. Lead/escalation and forward-return diagnostics are descriptive and do not alter the tested entry gates.',
+        'warning_diagnostics': 'Shorter MAs are analysed as possible early-warning signals. Lead/escalation and forward-return diagnostics are descriptive and do not alter tested entry gates.',
         'cascade_diagnostics': 'Counts how many MA horizons (50/100/150/180/200/220) are simultaneously in 3-day-confirmed below+falling deterioration using 20d slope; descriptive only.',
         'capital_proxy': 'Starts with 1,750 USDT, max 300 USDT per signal, refuses entries without free cash, settles at strategy exit. Drawdown is realised/cost-basis proxy, not exact mark-to-market.',
-        'validation_warning': 'Underlying entry/exit strategy was previously developed using full history. This is robustness analysis, not pristine independent out-of-sample validation.'
+        'validation_warning': 'Underlying entry/exit strategy was previously developed using full history. This is robustness analysis, not pristine independent out-of-sample validation.',
     }
     (out / 'manifest.json').write_text(json.dumps(manifest, indent=2))
 
