@@ -1,0 +1,35 @@
+name: Pre-Breakout Round 4E Warning Peak Timing
+
+on:
+  push:
+    paths:
+      - 'research/round4e_warning_peak_timing.py'
+      - '.github/workflows/prebreakout-round4e-peak-timing.yml'
+  workflow_dispatch:
+
+jobs:
+  round4e_peak_timing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Restore Binance archive cache
+        uses: actions/cache@v4
+        with:
+          path: research/data
+          key: binance-research-data-v1
+      - name: Install dependencies
+        run: pip install pandas numpy requests
+      - name: Run peak timing diagnostic
+        run: python research/round4e_warning_peak_timing.py
+      - name: Show results
+        run: |
+          cat research/results/round4e_peak_timing/summary.csv
+          head -30 research/results/round4e_peak_timing/warning_peak_timing.csv
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebreakout-round4e-warning-peak-timing
+          path: research/results/round4e_peak_timing/
