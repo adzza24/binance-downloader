@@ -1,0 +1,41 @@
+name: Pre-Breakout Round 4G Coin Regime Actions
+
+on:
+  push:
+    paths:
+      - 'research/round4g_coin_regime_actions.py'
+      - '.github/workflows/prebreakout-round4g.yml'
+  workflow_dispatch:
+
+jobs:
+  round4g:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Restore Binance archive cache
+        uses: actions/cache@v4
+        with:
+          path: data
+          key: binance-data-${{ runner.os }}-${{ hashFiles('research/config.json') }}
+          restore-keys: |
+            binance-data-${{ runner.os }}-
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run Round 4G research
+        run: python research/round4g_coin_regime_actions.py
+      - name: Show summary
+        run: |
+          echo '--- summary.csv ---'
+          cat research/results/round4g/summary.csv
+          echo '--- year_summary.csv ---'
+          cat research/results/round4g/year_summary.csv
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebreakout-round4g-coin-regime-actions
+          path: research/results/round4g/
+          retention-days: 90
