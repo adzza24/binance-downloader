@@ -11,8 +11,7 @@ on:
 
 permissions:
   contents: write
-
-concurrency:
+\ nconcurrency:
   group: live-market-snapshot
   cancel-in-progress: false
 
@@ -47,6 +46,16 @@ jobs:
 
       - name: Show snapshot metadata
         run: cat live/output/snapshot_meta.json
+
+      - name: Upload live market snapshot artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-market-snapshot
+          path: |
+            live/output/current_snapshot.csv
+            live/output/snapshot_meta.json
+          retention-days: 2
+          if-no-files-found: error
 
       - name: Publish current snapshot to live-data branch
         env:
