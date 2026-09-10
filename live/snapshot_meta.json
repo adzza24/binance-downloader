@@ -1,0 +1,20 @@
+{
+  "schema_version": "1",
+  "generated_at": "2026-09-10T00:22:40.288285+00:00",
+  "pipeline_status": "OK",
+  "expected_latest_completed_1h_open": "2026-09-09T23:00:00+00:00",
+  "expected_latest_completed_1d_open": "2026-09-09T00:00:00+00:00",
+  "min_latest_1h_open": "2026-09-09T23:00:00+00:00",
+  "max_latest_1h_open": "2026-09-09T23:00:00+00:00",
+  "min_latest_1d_open": "2026-09-09T00:00:00+00:00",
+  "max_latest_1d_open": "2026-09-09T00:00:00+00:00",
+  "universe_count": 480,
+  "snapshot_count": 480,
+  "incomplete_count": 92,
+  "failed_count": 0,
+  "failed_symbols": [],
+  "retention": {
+    "1h": 800,
+    "1d": 240
+  }
+}
