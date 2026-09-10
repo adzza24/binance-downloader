@@ -1,8 +1,6 @@
 name: Live Market Snapshot
 
 on:
-  schedule:
-    - cron: '7 * * * *'
   workflow_dispatch:
   push:
     paths:
