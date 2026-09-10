@@ -4,6 +4,10 @@ on:
   schedule:
     - cron: '7 * * * *'
   workflow_dispatch:
+  push:
+    paths:
+      - 'live/update_market_snapshot.py'
+      - '.github/workflows/live-market-snapshot.yml'
 
 permissions:
   contents: write
