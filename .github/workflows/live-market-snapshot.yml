@@ -69,6 +69,8 @@ jobs:
           from pathlib import Path
 
           meta = json.loads(Path('live/output/snapshot_meta.json').read_text())
+          trigger_path = Path('live/watch_trigger.txt')
+          trigger_value = trigger_path.read_text().strip() if trigger_path.exists() else ''
           pointer = {
               'artifact_name': 'live-market-snapshot',
               'artifact_id': int(os.environ['ARTIFACT_ID']),
@@ -76,6 +78,7 @@ jobs:
               'workflow_run_id': int(os.environ['GITHUB_RUN_ID']),
               'workflow_run_attempt': int(os.environ['GITHUB_RUN_ATTEMPT']),
               'head_sha': os.environ['GITHUB_SHA'],
+              'trigger_value': trigger_value,
               'snapshot_generated_at': meta.get('generated_at'),
               'snapshot_schema_version': meta.get('schema_version'),
               'pipeline_status': meta.get('pipeline_status'),
