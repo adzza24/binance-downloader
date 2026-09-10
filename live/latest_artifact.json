@@ -1,0 +1,12 @@
+{
+  "artifact_name": "live-market-snapshot",
+  "artifact_id": 10133784324,
+  "artifact_digest": "a05d1b0d1aa5e5d9853d0d196005eb4058a4ba7bb8d0ba05a8b5adc763bc1012",
+  "workflow_run_id": 34429115368,
+  "workflow_run_attempt": 1,
+  "head_sha": "1633ad4a50b847e38a8639ac364d4d6454ddc38e",
+  "snapshot_generated_at": "2026-09-10T02:21:43.477429+00:00",
+  "snapshot_schema_version": "2",
+  "pipeline_status": "OK",
+  "published_at": "2026-09-10T02:21:44.778593+00:00"
+}
