@@ -1,0 +1,66 @@
+name: Live Market Snapshot
+
+on:
+  schedule:
+    - cron: '7 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: live-market-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Restore live market cache
+        uses: actions/cache@v4
+        with:
+          path: live/cache
+          key: live-market-cache-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            live-market-cache-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pip install -r research/requirements.txt
+
+      - name: Update rolling market data and build snapshot
+        run: python live/update_market_snapshot.py
+
+      - name: Show snapshot metadata
+        run: cat live/output/snapshot_meta.json
+
+      - name: Publish current snapshot to live-data branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/live-data
+          git clone --depth 1 --branch live-data "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" /tmp/live-data
+          mkdir -p /tmp/live-data/live
+          cp live/output/current_snapshot.csv /tmp/live-data/live/current_snapshot.csv
+          cp live/output/snapshot_meta.json /tmp/live-data/live/snapshot_meta.json
+          cd /tmp/live-data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add live/current_snapshot.csv live/snapshot_meta.json
+          if git diff --cached --quiet; then
+            echo "No snapshot changes to publish"
+          else
+            git commit -m "Update live market snapshot"
+            git push origin live-data
+          fi
