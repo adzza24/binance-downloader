@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 import requests
 
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"
 HOURLY_KEEP = 800
 DAILY_KEEP = 240
 CACHE_PATH = Path(os.environ.get("LIVE_MARKET_CACHE", "live/cache/market.sqlite"))
@@ -257,12 +257,16 @@ def load_frame(db: sqlite3.Connection, symbol: str, interval: str) -> pd.DataFra
 
 
 def calc_snapshot_row(meta: dict, h: pd.DataFrame, d: pd.DataFrame, btc: pd.DataFrame, ticker: dict, error: str | None) -> dict:
+    controlled_complete = len(h) >= 800
+    coin200_complete = len(d) >= 200
     row = {
         **meta,
         "snapshot_time": datetime.now(timezone.utc).isoformat(),
         "hourly_candles": len(h),
         "daily_candles": len(d),
-        "history_complete": bool(len(h) >= 721 and len(d) >= 220),
+        "controlled_activity_history_complete": controlled_complete,
+        "coin200_history_complete": coin200_complete,
+        "history_complete": bool(controlled_complete and coin200_complete),
         "data_error": error or "",
         "latest_hourly_open": iso_ms(h.open_time.iloc[-1]) if len(h) else "",
         "latest_daily_open": iso_ms(d.open_time.iloc[-1]) if len(d) else "",
@@ -309,9 +313,9 @@ def calc_snapshot_row(meta: dict, h: pd.DataFrame, d: pd.DataFrame, btc: pd.Data
             recent = h.volume.iloc[-61:-1].mean()
             prior = h.volume.iloc[-121:-61].mean()
             row["volume_contraction"] = finite(recent / prior) if prior else None
-        if len(h) >= 721:
+        if len(h) >= 720:
             ref_close = h.close.iloc[-121]
-            prior_low = h.low.iloc[-721:-121].min()
+            prior_low = h.low.iloc[-720:-120].min()
             row["prior_impulse"] = finite(ref_close / prior_low - 1) if prior_low else None
 
     if len(btc) >= 73 and len(h) >= 73:
@@ -328,10 +332,10 @@ def calc_snapshot_row(meta: dict, h: pd.DataFrame, d: pd.DataFrame, btc: pd.Data
 
     if len(d):
         row["completed_daily_close"] = finite(d.close.iloc[-1])
-        ma = d.close.rolling(200).mean()
-        if len(d) >= 200:
+        ma = d.close.rolling(200, min_periods=180).mean()
+        if len(d) >= 180:
             row["ma_200d"] = finite(ma.iloc[-1])
-        if len(d) >= 220:
+        if len(d) >= 200:
             row["ma_200d_20d_ago"] = finite(ma.iloc[-21])
     return row
 
@@ -387,6 +391,8 @@ def main() -> None:
     snapshot.to_csv(OUT_DIR / "current_snapshot.csv", index=False)
 
     incomplete = int((~snapshot.history_complete).sum()) if len(snapshot) else 0
+    controlled_incomplete = int((~snapshot.controlled_activity_history_complete).sum()) if len(snapshot) else 0
+    coin200_incomplete = int((~snapshot.coin200_history_complete).sum()) if len(snapshot) else 0
     failed_symbols = sorted(failures)
     pipeline_status = "FAILED" if not len(snapshot) else ("PARTIAL" if failed_symbols else "OK")
     meta = {
@@ -402,6 +408,8 @@ def main() -> None:
         "universe_count": len(universe),
         "snapshot_count": len(snapshot),
         "incomplete_count": incomplete,
+        "controlled_activity_incomplete_count": controlled_incomplete,
+        "coin200_incomplete_count": coin200_incomplete,
         "failed_count": len(failed_symbols),
         "failed_symbols": failed_symbols,
         "retention": {"1h": HOURLY_KEEP, "1d": DAILY_KEEP},
