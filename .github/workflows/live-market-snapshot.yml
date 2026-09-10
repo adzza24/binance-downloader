@@ -49,6 +49,7 @@ jobs:
         run: cat live/output/snapshot_meta.json
 
       - name: Upload live market snapshot artifact
+        id: upload_snapshot
         uses: actions/upload-artifact@v4
         with:
           name: live-market-snapshot
@@ -57,6 +58,33 @@ jobs:
             live/output/snapshot_meta.json
           retention-days: 2
           if-no-files-found: error
+
+      - name: Build latest artifact pointer
+        env:
+          ARTIFACT_ID: ${{ steps.upload_snapshot.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.upload_snapshot.outputs.artifact-digest }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          meta = json.loads(Path('live/output/snapshot_meta.json').read_text())
+          pointer = {
+              'artifact_name': 'live-market-snapshot',
+              'artifact_id': int(os.environ['ARTIFACT_ID']),
+              'artifact_digest': os.environ.get('ARTIFACT_DIGEST', ''),
+              'workflow_run_id': int(os.environ['GITHUB_RUN_ID']),
+              'workflow_run_attempt': int(os.environ['GITHUB_RUN_ATTEMPT']),
+              'head_sha': os.environ['GITHUB_SHA'],
+              'snapshot_generated_at': meta.get('generated_at'),
+              'snapshot_schema_version': meta.get('schema_version'),
+              'pipeline_status': meta.get('pipeline_status'),
+              'published_at': datetime.now(timezone.utc).isoformat(),
+          }
+          Path('live/output/latest_artifact.json').write_text(json.dumps(pointer, indent=2) + '\n')
+          PY
+          cat live/output/latest_artifact.json
 
       - name: Publish current snapshot to live-data branch
         env:
@@ -68,10 +96,11 @@ jobs:
           mkdir -p /tmp/live-data/live
           cp live/output/current_snapshot.csv /tmp/live-data/live/current_snapshot.csv
           cp live/output/snapshot_meta.json /tmp/live-data/live/snapshot_meta.json
+          cp live/output/latest_artifact.json /tmp/live-data/live/latest_artifact.json
           cd /tmp/live-data
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add live/current_snapshot.csv live/snapshot_meta.json
+          git add live/current_snapshot.csv live/snapshot_meta.json live/latest_artifact.json
           if git diff --cached --quiet; then
             echo "No snapshot changes to publish"
           else
