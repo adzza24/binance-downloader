@@ -5,7 +5,7 @@ import math
 import os
 import sqlite3
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,6 +18,7 @@ HOURLY_KEEP = 800
 DAILY_KEEP = 240
 CACHE_PATH = Path(os.environ.get("LIVE_MARKET_CACHE", "live/cache/market.sqlite"))
 OUT_DIR = Path(os.environ.get("LIVE_MARKET_OUTPUT", "live/output"))
+EXCLUSIONS_PATH = Path(os.environ.get("LIVE_MARKET_EXCLUSIONS", "live/excluded_symbols.json"))
 
 BASE_URLS = [
     "https://data-api.binance.vision",
@@ -37,10 +38,19 @@ STABLE_BASES = {
 }
 LEVERAGED_SUFFIXES = ("UP", "DOWN", "BULL", "BEAR")
 
-KLINE_COLS = [
-    "open_time", "open", "high", "low", "close", "volume", "close_time",
-    "quote_volume", "trades", "taker_buy_base", "taker_buy_quote", "ignore",
-]
+# Explicitly identified tokenised-equity instruments. Keep this list explicit rather
+# than relying on a suffix heuristic, which could exclude unrelated crypto assets.
+TOKENISED_EQUITY_BASES = {
+    "AAOIB", "AAPLB", "DELLB", "MRNAB", "MRVLB", "MSFTB", "MSTRB", "MUUB", "WDCB",
+}
+
+
+def load_account_exclusions() -> set[str]:
+    if not EXCLUSIONS_PATH.exists():
+        return set()
+    data = json.loads(EXCLUSIONS_PATH.read_text())
+    values = data.get("account_unavailable_symbols", [])
+    return {str(x).upper().strip() for x in values if str(x).strip()}
 
 
 def utc_now_ms() -> int:
@@ -130,17 +140,23 @@ def connect() -> sqlite3.Connection:
 
 def current_universe() -> list[dict]:
     info = public_get("/api/v3/exchangeInfo")
+    account_exclusions = load_account_exclusions()
     out = []
     for s in info.get("symbols", []):
+        symbol = s.get("symbol", "")
         base = s.get("baseAsset", "")
         if s.get("quoteAsset") != "USDT":
             continue
         if s.get("status") != "TRADING" or not s.get("isSpotTradingAllowed", False):
             continue
+        if symbol in account_exclusions:
+            continue
         if base in STABLE_BASES or base.endswith(LEVERAGED_SUFFIXES):
             continue
+        if base in TOKENISED_EQUITY_BASES:
+            continue
         out.append({
-            "symbol": s["symbol"],
+            "symbol": symbol,
             "base_asset": base,
             "quote_asset": s["quoteAsset"],
             "trading_status": s["status"],
@@ -188,8 +204,6 @@ def parse_rows(symbol: str, interval: str, rows: list, now_ms: int) -> list[tupl
 
 
 def update_interval(db_path: Path, symbol: str, interval: str, keep: int, expected: int, now_ms: int) -> tuple[int, str | None]:
-    # Each worker uses its own SQLite connection. WAL + short commits avoids sharing
-    # a connection across threads while keeping the cache compact and recoverable.
     db = sqlite3.connect(db_path, timeout=60)
     try:
         last = cached_max(db, symbol, interval)
@@ -225,7 +239,6 @@ def update_interval(db_path: Path, symbol: str, interval: str, keep: int, expect
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, parsed,
             )
-        # Bounded rolling retention: keep only the newest N completed rows.
         db.execute(
             """
             DELETE FROM klines
@@ -319,8 +332,6 @@ def calc_snapshot_row(meta: dict, h: pd.DataFrame, d: pd.DataFrame, btc: pd.Data
             row["prior_impulse"] = finite(ref_close / prior_low - 1) if prior_low else None
 
     if len(btc) >= 73 and len(h) >= 73:
-        # Align on completed hourly open time rather than assuming every symbol has
-        # an identical row count; newly listed or sparse assets remain explicit.
         b = btc.set_index("open_time")["close"]
         cur_t = int(h.open_time.iloc[-1])
         old_t = int(h.open_time.iloc[-73])
@@ -349,9 +360,13 @@ def main() -> None:
 
     universe = current_universe()
     symbols = [x["symbol"] for x in universe]
-    print(f"Universe: {len(symbols)} active non-stable Binance USDT spot symbols", flush=True)
+    account_exclusions = load_account_exclusions()
+    print(
+        f"Universe: {len(symbols)} active eligible Binance USDT spot symbols "
+        f"({len(account_exclusions)} account exclusions; {len(TOKENISED_EQUITY_BASES)} tokenised-equity exclusions)",
+        flush=True,
+    )
 
-    # Remove cache rows for symbols no longer in the current objective universe.
     if symbols:
         placeholders = ",".join("?" for _ in symbols)
         db.execute(f"DELETE FROM klines WHERE symbol NOT IN ({placeholders})", symbols)
@@ -407,6 +422,8 @@ def main() -> None:
         "max_latest_1d_open": iso_ms(max(latest_d)) if latest_d else "",
         "universe_count": len(universe),
         "snapshot_count": len(snapshot),
+        "account_exclusion_count": len(account_exclusions),
+        "tokenised_equity_exclusion_count": len(TOKENISED_EQUITY_BASES),
         "incomplete_count": incomplete,
         "controlled_activity_incomplete_count": controlled_incomplete,
         "coin200_incomplete_count": coin200_incomplete,
