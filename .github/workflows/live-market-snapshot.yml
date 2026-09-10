@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - 'live/update_market_snapshot.py'
+      - 'live/excluded_symbols.json'
       - 'live/watch_trigger.txt'
       - '.github/workflows/live-market-snapshot.yml'
 
