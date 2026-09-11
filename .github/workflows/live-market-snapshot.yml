@@ -2,6 +2,8 @@ name: Live Market Snapshot
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '10,25,40,55 * * * *'
   push:
     paths:
       - 'live/update_market_snapshot.py'
