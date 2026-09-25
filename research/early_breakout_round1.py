@@ -242,16 +242,19 @@ def path_metrics(df: pd.DataFrame, sig: pd.Series) -> dict:
     for day in DAILY_HORIZONS:
         target = entry_t + pd.Timedelta(days=day)
         w = z[z.time < target]
-        result.update(window_metrics(w, entry, f"d{day}"))
+        complete = bool(len(z) and z.time.iloc[-1] >= target - pd.Timedelta(hours=1))
+        result.update(window_metrics(w, entry, f"d{day}", complete))
 
     for month in MONTH_HORIZONS:
         target = entry_t + pd.DateOffset(months=month)
         w = z[z.time < target]
-        result.update(window_metrics(w, entry, f"m{month}"))
+        complete = bool(len(z) and z.time.iloc[-1] >= target - pd.Timedelta(hours=1))
+        result.update(window_metrics(w, entry, f"m{month}", complete))
 
     year_end = entry_t + pd.DateOffset(years=1)
     wy = z[z.time < year_end]
-    result.update(window_metrics(wy, entry, "y1"))
+    year_complete = bool(len(z) and z.time.iloc[-1] >= year_end - pd.Timedelta(hours=1))
+    result.update(window_metrics(wy, entry, "y1", year_complete))
 
     # Exact first-hit times for useful profit milestones.
     for th in THRESHOLDS:
@@ -273,11 +276,11 @@ def path_metrics(df: pd.DataFrame, sig: pd.Series) -> dict:
     result["support_close_break_hours"] = (
         (pd.Timestamp(closes.iloc[0].time) - entry_t).total_seconds() / 3600 if len(closes) else np.nan
     )
-    result["full_12m_observed"] = bool(len(z) and z.time.iloc[-1] >= year_end - pd.Timedelta(hours=1))
+    result["full_12m_observed"] = year_complete
     return result
 
 
-def window_metrics(w: pd.DataFrame, entry: float, prefix: str) -> dict:
+def window_metrics(w: pd.DataFrame, entry: float, prefix: str, complete: bool) -> dict:
     if w.empty:
         return {
             f"{prefix}_observed": False,
@@ -307,7 +310,7 @@ def window_metrics(w: pd.DataFrame, entry: float, prefix: str) -> dict:
     retained = end_ret / mfe if mfe > 0 else np.nan
 
     return {
-        f"{prefix}_observed": True,
+        f"{prefix}_observed": bool(complete),
         f"{prefix}_mfe_pct": float(mfe),
         f"{prefix}_mae_pct": float(mae),
         f"{prefix}_end_return_pct": float(end_ret),
@@ -424,6 +427,24 @@ def horizon_summary(all_rows: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def horizon_hit_summary(all_rows: pd.DataFrame) -> pd.DataFrame:
+    rows = []
+    specs = [(f"d{d}", f"{d}d") for d in DAILY_HORIZONS] + [(f"m{m}", f"{m}m") for m in MONTH_HORIZONS]
+    for prefix, label in specs:
+        obs = all_rows[all_rows[f"{prefix}_observed"] == True]
+        for stage_label, z in [("ALL", obs)] + [(st, obs[obs.stage == st]) for st in sorted(obs.stage.dropna().unique())]:
+            for th in [0.05, 0.10, 0.20, 0.30, 0.50]:
+                rows.append({
+                    "horizon": label,
+                    "stage": stage_label,
+                    "threshold_pct": th,
+                    "observations": int(len(z)),
+                    "hit_count": int((z[f"{prefix}_mfe_pct"] >= th).sum()),
+                    "hit_rate": float((z[f"{prefix}_mfe_pct"] >= th).mean()) if len(z) else np.nan,
+                })
+    return pd.DataFrame(rows)
+
+
 def threshold_summary(all_rows: pd.DataFrame) -> pd.DataFrame:
     rows = []
     z = all_rows[all_rows.full_12m_observed == True].copy()
@@ -535,12 +556,14 @@ def main():
     pd.DataFrame(failures).to_csv(OUT / "failures.csv", index=False)
 
     hs = horizon_summary(merged)
+    hh = horizon_hit_summary(merged)
     ts = threshold_summary(merged)
     ws = winner_drawdown_summary(merged)
     ps = peak_timing_summary(merged)
     bs = baseline_summary(exits)
 
     hs.to_csv(OUT / "horizon_summary.csv", index=False)
+    hh.to_csv(OUT / "horizon_hit_rates.csv", index=False)
     ts.to_csv(OUT / "threshold_summary.csv", index=False)
     ws.to_csv(OUT / "winner_pre_peak_drawdown.csv", index=False)
     ps.to_csv(OUT / "peak_timing_summary.csv", index=False)
