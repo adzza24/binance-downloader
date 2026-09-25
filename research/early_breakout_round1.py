@@ -525,7 +525,7 @@ def main():
     cfg = json.loads(Path("research/config.json").read_text())
     OUT.mkdir(parents=True, exist_ok=True)
     universe = list(dict.fromkeys(cfg["symbols"] + REFERENCE_SYMBOLS))
-    universe = [s for s in universe if s not in TASK_EXCLUSIONS]
+    universe = [s for s in universe if s not in TASK_EXCLUSIONS and s != "BTCUSDT"]
 
     btc = load_symbol("BTCUSDT", cfg["interval"], cfg["start"], cfg["end"])
     if len(btc) < 900:
