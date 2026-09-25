@@ -265,6 +265,12 @@ def path_metrics(df: pd.DataFrame, sig: pd.Series) -> dict:
             (pd.Timestamp(hits.iloc[0].time) - entry_t).total_seconds() / 3600
             if len(hits) else np.nan
         )
+        if len(hits):
+            hit_t = pd.Timestamp(hits.iloc[0].time)
+            pre_hit = z[(z.time >= entry_t) & (z.time <= hit_t)]
+            result[f"mae_before_{int(th*100)}pct"] = float(pre_hit.low.min() / entry - 1)
+        else:
+            result[f"mae_before_{int(th*100)}pct"] = np.nan
 
     # Failure of the original base/support.
     support = float(sig.structural_support)
@@ -458,6 +464,9 @@ def threshold_summary(all_rows: pd.DataFrame) -> pd.DataFrame:
             "hit_rate": float(len(hit) / len(z)) if len(z) else np.nan,
             "median_hours_to_hit": q(hit[f"hours_to_{pct}pct"], .50),
             "p75_hours_to_hit": q(hit[f"hours_to_{pct}pct"], .75),
+            "median_mae_before_hit_pct": q(hit[f"mae_before_{pct}pct"], .50),
+            "p25_mae_before_hit_pct": q(hit[f"mae_before_{pct}pct"], .25),
+            "p10_mae_before_hit_pct": q(hit[f"mae_before_{pct}pct"], .10),
         })
     return pd.DataFrame(rows)
 
