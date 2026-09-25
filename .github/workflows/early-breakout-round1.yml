@@ -1,0 +1,49 @@
+name: Early Breakout Round 1 Path Study
+
+on:
+  push:
+    paths:
+      - 'research/early_breakout_round1.py'
+      - '.github/workflows/early-breakout-round1.yml'
+  workflow_dispatch:
+
+jobs:
+  round1:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Restore Binance archive cache
+        uses: actions/cache@v4
+        with:
+          path: research/cache/binance
+          key: early-breakout-binance-v1-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            early-breakout-binance-v1-${{ runner.os }}-
+      - name: Install dependencies
+        run: pip install pandas numpy requests
+      - name: Run Early Breakout Round 1
+        run: python research/early_breakout_round1.py
+      - name: Show decision-driving summaries
+        run: |
+          echo '--- stage_entry_summary.csv ---'
+          cat research/results/early_breakout_round1/stage_entry_summary.csv
+          echo '--- horizon_summary.csv ---'
+          cat research/results/early_breakout_round1/horizon_summary.csv
+          echo '--- threshold_summary.csv ---'
+          cat research/results/early_breakout_round1/threshold_summary.csv
+          echo '--- winner_pre_peak_drawdown.csv ---'
+          cat research/results/early_breakout_round1/winner_pre_peak_drawdown.csv
+          echo '--- peak_timing_summary.csv ---'
+          cat research/results/early_breakout_round1/peak_timing_summary.csv
+          echo '--- round3h_reference_summary.csv ---'
+          cat research/results/early_breakout_round1/round3h_reference_summary.csv
+      - name: Upload full research outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: early-breakout-round1-path-study
+          path: research/results/early_breakout_round1/
+          retention-days: 90
