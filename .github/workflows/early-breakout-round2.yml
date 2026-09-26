@@ -1,0 +1,54 @@
+name: Early Breakout Round 2 Exit Research
+
+on:
+  push:
+    paths:
+      - 'research/early_breakout_round2.py'
+      - '.github/workflows/early-breakout-round2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  round2:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Restore Binance archive cache
+        uses: actions/cache@v4
+        with:
+          path: research/cache/binance
+          key: early-breakout-binance-v1-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            early-breakout-binance-v1-${{ runner.os }}-
+      - name: Install dependencies
+        run: pip install pandas numpy requests
+      - name: Run Early Breakout Round 2
+        run: python research/early_breakout_round2.py
+      - name: Show analysis
+        run: |
+          cat research/results/early_breakout_round2/ANALYSIS.md
+          echo '--- family_leaders.csv ---'
+          cat research/results/early_breakout_round2/family_leaders.csv
+      - name: Persist Round 2 results in repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research/results/early_breakout_round2/
+          if git diff --cached --quiet; then
+            echo "No result changes to commit"
+          else
+            git commit -m "Store Early Breakout Round 2 results"
+            git push origin HEAD:master
+          fi
+      - name: Upload Round 2 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: early-breakout-round2-exit-research
+          path: research/results/early_breakout_round2/
+          retention-days: 90
