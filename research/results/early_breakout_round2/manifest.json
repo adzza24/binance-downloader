@@ -1,0 +1,109 @@
+{
+  "study": "Early Breakout Round 2 - exit architecture",
+  "status": "RESEARCH ONLY - no live task/strategy edits",
+  "entry": "Frozen Round 1 research entry operationalisation",
+  "cohort_signals": 3939,
+  "dataset": {
+    "start": "2019-01-01",
+    "end": "2026-08-31",
+    "interval": "1h",
+    "universe": [
+      "ETHUSDT",
+      "BNBUSDT",
+      "SOLUSDT",
+      "XRPUSDT",
+      "ADAUSDT",
+      "DOGEUSDT",
+      "LINKUSDT",
+      "AVAXUSDT",
+      "DOTUSDT",
+      "LTCUSDT",
+      "BCHUSDT",
+      "TRXUSDT",
+      "ATOMUSDT",
+      "NEARUSDT",
+      "APTUSDT",
+      "ARBUSDT",
+      "OPUSDT",
+      "INJUSDT",
+      "SUIUSDT",
+      "FETUSDT",
+      "RUNEUSDT",
+      "AAVEUSDT",
+      "UNIUSDT",
+      "CRVUSDT",
+      "CVXUSDT",
+      "ZECUSDT",
+      "AUCTIONUSDT",
+      "WLDUSDT",
+      "PEOPLEUSDT",
+      "COTIUSDT",
+      "SUNUSDT",
+      "GALAUSDT",
+      "SANDUSDT",
+      "MANAUSDT",
+      "FILUSDT",
+      "ETCUSDT",
+      "ICPUSDT",
+      "ALGOUSDT",
+      "VETUSDT",
+      "SYNUSDT",
+      "LSKUSDT",
+      "GUSDT",
+      "CELRUSDT",
+      "ONEUSDT"
+    ]
+  },
+  "costs": {
+    "position_usdt": 300.0,
+    "fee_rate": 0.001,
+    "slippage_rate": 0.0005
+  },
+  "time_caps_days": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    30
+  ],
+  "runner_caps_days": [
+    7,
+    30,
+    90,
+    180,
+    365
+  ],
+  "stops": [
+    "FIXED3",
+    "FIXED5",
+    "FIXED7",
+    "FIXED10",
+    "STRUCT_CAP10"
+  ],
+  "runner_stops": [
+    "FIXED5",
+    "FIXED7",
+    "FIXED10",
+    "STRUCT_CAP10"
+  ],
+  "fixed_take_profits": [
+    0.1,
+    0.2
+  ],
+  "trail_givebacks": [
+    0.3,
+    0.4,
+    0.5,
+    0.6
+  ],
+  "partial_targets": [
+    0.1,
+    0.2
+  ],
+  "ambiguity": "Initial stop wins same-hour ambiguity; BE/trail changes apply after the activation candle.",
+  "runner": "Full: +5% BE, +30% +10% floor and selected gain giveback. Half-runner: sell 50% at +10/+20, runner BE, same +30% trail. +1000% closes remaining.",
+  "comparison": "Independent 300 USDT trades. Natural exits are retained even when a later time cap is right-censored; unresolved trades without the required cap are excluded."
+}
