@@ -1,0 +1,70 @@
+{
+  "study": "Explosive Move Discovery Round 1",
+  "status": "RESEARCH ONLY - no scheduled task or live strategy edits",
+  "event_definition": {
+    "target_pct": 0.2,
+    "stop_pct": 0.05,
+    "max_observation_hours": 720,
+    "dedupe_cooldown_hours_after_target": 24
+  },
+  "universe": "Current top-100 Binance USDT spot pairs by current 24h quote volume; top-50 separately reported; stablecoins, leveraged tokens and known unavailable symbols excluded.",
+  "survivorship_caveat": "Current-universe selection omits historically important delisted/now-illiquid assets and is not a point-in-time historical top-100.",
+  "history": {
+    "start": "2019-01-01",
+    "end": "2026-08-31",
+    "interval": "1h"
+  },
+  "precursor_lead_hours": [
+    0,
+    6,
+    12,
+    24,
+    72,
+    168,
+    336,
+    720
+  ],
+  "controls": "Up to 3 same-symbol/same-year HARD FAILURES per event (reach +5% before -5% but fail +20% before -5%) plus 1 random non-event control. Positive event intervals are excluded from controls.",
+  "features": [
+    "ret_6h",
+    "ret_24h",
+    "ret_72h",
+    "ret_7d",
+    "ret_14d",
+    "ret_30d",
+    "ret_60d",
+    "ret_90d",
+    "range_24h",
+    "range_72h",
+    "range_7d",
+    "range_14d",
+    "range_30d",
+    "range_90d",
+    "atr24_pct",
+    "atr7d_pct",
+    "atr30d_pct",
+    "atr24_vs_7d",
+    "range24_vs_7d",
+    "dist_7d_high",
+    "dist_30d_high",
+    "dist_90d_high",
+    "rebound_7d_low",
+    "rebound_30d_low",
+    "worst_1h_ret_7d",
+    "worst_4h_ret_14d",
+    "volume_ratio_6h",
+    "volume_ratio_24h",
+    "trade_ratio_6h",
+    "taker_buy_6h",
+    "quote_volume_24h_log",
+    "rs_24h",
+    "rs_7d",
+    "rs_30d"
+  ],
+  "splits": {
+    "discovery": "2019-2022",
+    "validation": "2023-2024",
+    "holdout": "2025-2026"
+  },
+  "next_stage": "WATCH prediction days early, then ENTRY trigger before +5% movement."
+}
