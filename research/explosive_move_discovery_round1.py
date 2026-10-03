@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json, re
+import json, re, zlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -9,6 +9,9 @@ import numpy as np
 import pandas as pd
 from numba import njit
 from sklearn.metrics import roc_auc_score
+from sklearn.cluster import KMeans
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
 
 from binance_data import load_symbol
 from early_breakout_round1 import TASK_EXCLUSIONS
@@ -21,7 +24,8 @@ TARGET = 0.20
 STOP = 0.05
 EVENT_COOLDOWN_HOURS = 24
 LEADS = [0, 6, 12, 24, 72, 168, 336, 720]
-CONTROLS_PER_EVENT = 3
+HARD_CONTROLS_PER_EVENT = 3
+RANDOM_CONTROLS_PER_EVENT = 1
 RNG = np.random.default_rng(42)
 
 STABLE_BASES = {
@@ -148,22 +152,30 @@ def detect_events(symbol,rank,df):
         blocked=t+EVENT_COOLDOWN_HOURS
     return pd.DataFrame(rows),ti
 
-def control_indices(df,ti,events):
-    n=len(df); bad=np.zeros(n,dtype=np.bool_)
-    bad[np.flatnonzero(ti>=0)]=True
+def control_pools(df,ti,t5,events):
+    n=len(df); protected=np.zeros(n,dtype=np.bool_)
     for _,e in events.iterrows():
-        i=int(e.start_index); lo=max(2160,i-MAX_HOURS); hi=min(n,i+MAX_HOURS+1); bad[lo:hi]=True
-    return np.flatnonzero((~bad) & (np.arange(n)>=2160) & (np.arange(n)<n-MAX_HOURS-1))
+        lo=int(e.start_index); hi=min(n,int(e.target_index)+EVENT_COOLDOWN_HOURS+1)
+        protected[lo:hi]=True
+    valid=(np.arange(n)>=2160)&(np.arange(n)<n-MAX_HOURS-1)&(~protected)
+    hard=np.flatnonzero(valid & (t5>=0) & (ti<0))
+    random=np.flatnonzero(valid & (t5<0) & (ti<0))
+    return hard,random
 
-def sample_rows(symbol,events,ti,df,ff):
-    rows=[]; controls=control_indices(df,ti,events)
-    years=pd.to_datetime(df.time,utc=True).dt.year.to_numpy(); by_year={}
-    for y in np.unique(years[controls]):
-        by_year[int(y)]=controls[years[controls]==y]
+def sample_rows(symbol,events,ti,t5,df,ff):
+    rows=[]; hard,random=control_pools(df,ti,t5,events)
+    years=pd.to_datetime(df.time,utc=True).dt.year.to_numpy(); hard_by_year={}; random_by_year={}
+    for y in np.unique(years[hard]): hard_by_year[int(y)]=hard[years[hard]==y]
+    for y in np.unique(years[random]): random_by_year[int(y)]=random[years[random]==y]
+    rng=np.random.default_rng(zlib.crc32(symbol.encode()))
     for _,e in events.iterrows():
-        start_i=int(e.start_index); year=int(e.year); pool=by_year.get(year,np.array([],dtype=int))
-        chosen=RNG.choice(pool,size=min(CONTROLS_PER_EVENT,len(pool)),replace=False) if len(pool) else []
-        cases=[("WINNER",start_i,e.event_id)] + [("CONTROL",int(ci),e.event_id) for ci in chosen]
+        start_i=int(e.start_index); year=int(e.year)
+        hp=hard_by_year.get(year,np.array([],dtype=int)); rp=random_by_year.get(year,np.array([],dtype=int))
+        hc=rng.choice(hp,size=min(HARD_CONTROLS_PER_EVENT,len(hp)),replace=False) if len(hp) else []
+        rc=rng.choice(rp,size=min(RANDOM_CONTROLS_PER_EVENT,len(rp)),replace=False) if len(rp) else []
+        cases=[("WINNER",start_i,e.event_id)]
+        cases += [("HARD_FAIL",int(ci),e.event_id) for ci in hc]
+        cases += [("RANDOM_CONTROL",int(ci),e.event_id) for ci in rc]
         for label,pseudo_i,eid in cases:
             for lead in LEADS:
                 si=pseudo_i-lead
@@ -183,7 +195,9 @@ def process_symbol(meta,cfg,btc):
     if len(df)<3000: return symbol,pd.DataFrame(),[],f"insufficient_history:{len(df)}"
     events,ti=detect_events(symbol,rank,df)
     if events.empty: return symbol,events,[],None
-    ff=build_features(df,btc); samples=sample_rows(symbol,events,ti,df,ff)
+    c=df.close.to_numpy(float); h=df.high.to_numpy(float); l=df.low.to_numpy(float)
+    t5,_=clean_paths(c,h,l,MAX_HOURS,1.05,1-STOP)
+    ff=build_features(df,btc); samples=sample_rows(symbol,events,ti,t5,df,ff)
     return symbol,events,samples,None
 
 def auc_direction(z,feature):
@@ -197,22 +211,24 @@ def auc_direction(z,feature):
 
 def contrasts(samples):
     rows=[]
-    for lead in LEADS:
-        for split in ["DISCOVERY_2019_2022","VALIDATION_2023_2024","HOLDOUT_2025_2026"]:
-            z=samples[(samples.lead_hours==lead)&(samples.split==split)]
-            for f in FEATURES:
-                w=pd.to_numeric(z.loc[z.label=="WINNER",f],errors="coerce").dropna()
-                c=pd.to_numeric(z.loc[z.label=="CONTROL",f],errors="coerce").dropna()
-                if len(w)<10 or len(c)<10: continue
-                pooled=np.sqrt((w.var()+c.var())/2)
-                auc,dirn=auc_direction(z,f)
-                rows.append({"lead_hours":lead,"split":split,"feature":f,"winner_n":len(w),"control_n":len(c),
-                             "winner_median":w.median(),"control_median":c.median(),
-                             "standardised_diff":(w.mean()-c.mean())/pooled if pooled else np.nan,
-                             "separation_auc":auc,"direction":dirn})
+    for comparator in ["HARD_FAIL","RANDOM_CONTROL"]:
+        for lead in LEADS:
+            for split in ["DISCOVERY_2019_2022","VALIDATION_2023_2024","HOLDOUT_2025_2026"]:
+                z=samples[(samples.lead_hours==lead)&(samples.split==split)&(samples.label.isin(["WINNER",comparator]))]
+                for f in FEATURES:
+                    w=pd.to_numeric(z.loc[z.label=="WINNER",f],errors="coerce").dropna()
+                    c=pd.to_numeric(z.loc[z.label==comparator,f],errors="coerce").dropna()
+                    if len(w)<10 or len(c)<10: continue
+                    pooled=np.sqrt((w.var()+c.var())/2)
+                    auc,dirn=auc_direction(z,f)
+                    rows.append({"comparator":comparator,"lead_hours":lead,"split":split,"feature":f,"winner_n":len(w),"control_n":len(c),
+                                 "winner_median":w.median(),"control_median":c.median(),
+                                 "standardised_diff":(w.mean()-c.mean())/pooled if pooled else np.nan,
+                                 "separation_auc":auc,"direction":dirn})
     return pd.DataFrame(rows)
 
 def stable_features(ct):
+    ct=ct[ct.comparator=="HARD_FAIL"].copy()
     d=ct[ct.split=="DISCOVERY_2019_2022"][["lead_hours","feature","separation_auc","direction"]].rename(columns={"separation_auc":"discovery_auc","direction":"discovery_direction"})
     v=ct[ct.split=="VALIDATION_2023_2024"][["lead_hours","feature","separation_auc","direction"]].rename(columns={"separation_auc":"validation_auc","direction":"validation_direction"})
     h=ct[ct.split=="HOLDOUT_2025_2026"][["lead_hours","feature","separation_auc","direction"]].rename(columns={"separation_auc":"holdout_auc","direction":"holdout_direction"})
@@ -221,6 +237,23 @@ def stable_features(ct):
     x["same_direction_holdout"]=x.discovery_direction==x.holdout_direction
     x["min_auc"]=x[["discovery_auc","validation_auc","holdout_auc"]].min(axis=1)
     return x.sort_values(["lead_hours","min_auc"],ascending=[True,False])
+
+def event_archetypes(samples,events):
+    cols=["range_14d","range_30d","atr7d_pct","worst_4h_ret_14d","ret_30d","dist_30d_high","rebound_30d_low"]
+    w=samples[(samples.label=="WINNER")&(samples.lead_hours==0)][["event_id"]+cols].drop_duplicates("event_id").copy()
+    if len(w)<20: return pd.DataFrame(),pd.DataFrame()
+    imp=SimpleImputer(strategy="median"); scaler=StandardScaler()
+    X=scaler.fit_transform(imp.fit_transform(w[cols]))
+    k=KMeans(n_clusters=4,random_state=42,n_init=20).fit_predict(X)
+    w["archetype_cluster"]=k
+    detail=events.merge(w[["event_id","archetype_cluster"]],on="event_id",how="left")
+    agg=[]
+    for c,g in detail.groupby("archetype_cluster"):
+        row={"archetype_cluster":int(c),"events":len(g),"median_hours_to_20":g.hours_to_20pct.median(),"median_mfe_30d_pct":g.mfe_30d_pct.median()}
+        feats=w[w.archetype_cluster==c]
+        for col in cols: row[f"median_{col}"]=feats[col].median()
+        agg.append(row)
+    return detail,pd.DataFrame(agg)
 
 def event_summary(events):
     rows=[]
@@ -253,16 +286,17 @@ def write_analysis(summary,stable):
     for _,r in summary[summary.split=="ALL"].iterrows():
         lines.append(f"| {r.universe} | {int(r.events)} | {r.median_hours_to_20:.0f}h | {r.median_5_to_20_hours:.0f}h | {100*r.pct_target_within_1d:.1f}% | {100*r.pct_target_within_3d:.1f}% | {100*r.pct_target_within_7d:.1f}% |")
     lines += ["","## Preliminary stable precursor features","",
-              "Features below separate winners from same-symbol/year controls in the same direction across discovery, validation and holdout. AUC is univariate separation only, not a deployable signal.","",
+              "Features below separate winners from same-symbol/year HARD FAILURES in the same direction across discovery, validation and holdout. A hard failure reaches +5% before -5% but fails to reach +20% before the -5% stop. AUC is univariate separation only, not a deployable signal.","",
               "| Lead | Feature | Discovery AUC | Validation AUC | Holdout AUC |","|---:|---|---:|---:|---:|"]
     for _,r in top.head(25).iterrows():
         lines.append(f"| {int(r.lead_hours)}h | {r.feature} | {r.discovery_auc:.3f} | {r.validation_auc:.3f} | {r.holdout_auc:.3f} |")
     lines += ["","## Outputs","",
               "- events.csv: de-duplicated clean +20%/-5% events and milestone timing.",
               "- event_summary.csv: event counts and speed for top-50/top-100.",
-              "- precursor_samples.csv: winner/control snapshots from 30d before the move through the start.",
+              "- precursor_samples.csv.gz: compressed winner/hard-failure/random-control snapshots from 30d before the move through the start.",
               "- feature_contrasts.csv: winner vs control distributions by lead and time split.",
-              "- stable_features.csv: cross-period feature stability.",
+              "- stable_features.csv: winner vs hard-failure cross-period feature stability.",
+              "- event_archetypes.csv and archetype_summary.csv: unsupervised event-shape clusters to test flat-base vs capitulation-style precursors.",
               "- universe.csv: current top-100 universe used.",
               "- manifest.json: exact methodology.",
               "",
@@ -290,10 +324,12 @@ def main():
                 failures.append({"symbol":s,"error":repr(e)}); print("ERROR",s,repr(e),flush=True)
     events=pd.concat(event_parts,ignore_index=True) if event_parts else pd.DataFrame()
     samples=pd.DataFrame(sample_rows_all)
-    events.to_csv(OUT/"events.csv",index=False); samples.to_csv(OUT/"precursor_samples.csv",index=False); pd.DataFrame(failures).to_csv(OUT/"failures.csv",index=False)
+    events.to_csv(OUT/"events.csv",index=False); samples.to_csv(OUT/"precursor_samples.csv.gz",index=False,compression="gzip"); pd.DataFrame(failures).to_csv(OUT/"failures.csv",index=False)
     summ=event_summary(events); summ.to_csv(OUT/"event_summary.csv",index=False)
     ct=contrasts(samples); ct.to_csv(OUT/"feature_contrasts.csv",index=False)
     st=stable_features(ct); st.to_csv(OUT/"stable_features.csv",index=False)
+    arch_detail,arch_summary=event_archetypes(samples,events)
+    arch_detail.to_csv(OUT/"event_archetypes.csv",index=False); arch_summary.to_csv(OUT/"archetype_summary.csv",index=False)
     write_analysis(summ,st)
     manifest={
       "study":"Explosive Move Discovery Round 1",
@@ -303,7 +339,7 @@ def main():
       "survivorship_caveat":"Current-universe selection omits historically important delisted/now-illiquid assets and is not a point-in-time historical top-100.",
       "history":{"start":START,"end":END,"interval":"1h"},
       "precursor_lead_hours":LEADS,
-      "controls":"Up to 3 same-symbol/same-year non-event controls per event, excluding timestamps within +/-30d of a clean event.",
+      "controls":"Up to 3 same-symbol/same-year HARD FAILURES per event (reach +5% before -5% but fail +20% before -5%) plus 1 random non-event control. Positive event intervals are excluded from controls.",
       "features":FEATURES,
       "splits":{"discovery":"2019-2022","validation":"2023-2024","holdout":"2025-2026"},
       "next_stage":"WATCH prediction days early, then ENTRY trigger before +5% movement."
