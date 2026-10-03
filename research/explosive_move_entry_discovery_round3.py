@@ -37,7 +37,7 @@ def period_name(year: int) -> str:
     return "CONFIRMATION_2025_2026"
 
 
-def entry_path_metrics(df: pd.DataFrame, entry_i: int, entry: float) -> dict:
+def entry_path_metrics_full(df: pd.DataFrame, entry_i: int, entry: float) -> dict:
     end = min(len(df), entry_i + MAX_HOURS)
     min_low = entry
     max_high = entry
@@ -83,6 +83,32 @@ def entry_path_metrics(df: pd.DataFrame, entry_i: int, entry: float) -> dict:
     return out
 
 
+def precompute_forward_extrema(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+    high = pd.Series(df.high.to_numpy(dtype=float))
+    low = pd.Series(df.low.to_numpy(dtype=float))
+    future_high = high.iloc[::-1].rolling(MAX_HOURS, min_periods=1).max().iloc[::-1].to_numpy()
+    future_low = low.iloc[::-1].rolling(MAX_HOURS, min_periods=1).min().iloc[::-1].to_numpy()
+    return future_high, future_low
+
+
+def entry_path_metrics_fast(entry_i: int, entry: float, forward_high: np.ndarray, forward_low: np.ndarray) -> dict:
+    mfe = float(forward_high[entry_i] / entry - 1)
+    mae = float(forward_low[entry_i] / entry - 1)
+    out = {
+        "mfe_30d": mfe,
+        "mae_30d": mae,
+        "capped_upside20": min(max(mfe, 0.0), 0.20),
+        "hit20_any_30d": int(mfe >= 0.20),
+        "hit20_before_adverse5": np.nan,
+        "hit20_before_adverse10": np.nan,
+        "mae_before_20": np.nan,
+    }
+    for p in LEVELS:
+        out[f"hit{p}_any_30d"] = int(mfe >= p / 100)
+        out[f"hours_to_{p}"] = np.nan
+    return out
+
+
 def dynamic_values(df: pd.DataFrame, decision_i: int, watch_i: int, watch_low: float, watch_high: float) -> dict:
     close = float(df.close.iloc[decision_i])
     anchor = float(df.close.iloc[watch_i])
@@ -98,7 +124,7 @@ def dynamic_values(df: pd.DataFrame, decision_i: int, watch_i: int, watch_low: f
 
 def make_candidate_row(symbol: str, arch: str, split: str, df: pd.DataFrame, ff: pd.DataFrame,
                        watch_i: int, decision_i: int, watch_low: float, watch_high: float,
-                       cfg: dict, episode_id: str) -> dict | None:
+                       cfg: dict, episode_id: str, path_cache: tuple[np.ndarray, np.ndarray]) -> dict | None:
     if decision_i + 1 >= len(df):
         return None
     slip = float(cfg["slippage_rate"])
@@ -129,7 +155,7 @@ def make_candidate_row(symbol: str, arch: str, split: str, df: pd.DataFrame, ff:
         v = src.get(f, np.nan)
         row[f] = float(v) if pd.notna(v) else np.nan
     row.update(dynamic_values(df, decision_i, watch_i, watch_low, watch_high))
-    row.update(entry_path_metrics(df, entry_i, entry))
+    row.update(entry_path_metrics_fast(entry_i, entry, path_cache[0], path_cache[1]))
     return row
 
 
@@ -144,6 +170,7 @@ def build_causal_watch_candidates(universe: pd.DataFrame, data: dict[str, tuple[
             continue
         df, ff0 = data[symbol]
         ff = r2.apply_arch_to_feature_frame(ff0, arch_model)
+        path_cache = precompute_forward_extrema(df)
         years = pd.to_datetime(df.time, utc=True).dt.year.to_numpy()
 
         for arch in ["CAPITULATION", "BASE"]:
@@ -173,7 +200,7 @@ def build_causal_watch_candidates(universe: pd.DataFrame, data: dict[str, tuple[
                     watch_low = min(watch_low, float(df.low.iloc[j]))
                     watch_high = max(watch_high, float(df.high.iloc[j]))
                     split = period_name(int(years[j]))
-                    row = make_candidate_row(symbol, arch, split, df, ff, watch_i, j, watch_low, watch_high, cfg, episode_id)
+                    row = make_candidate_row(symbol, arch, split, df, ff, watch_i, j, watch_low, watch_high, cfg, episode_id, path_cache)
                     if row is None:
                         if float(df.close.iloc[j]) / float(df.close.iloc[watch_i]) - 1 > MAX_ENTRY_ADVANCE:
                             break
@@ -330,11 +357,11 @@ def fit_rf(candidates: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.Dat
             if len(hits) < 25:
                 continue
             mm = metrics(hits)
-            threshold_candidates.append((mm["hit20_any_rate"], mm["mean_capped_upside20"], mm["hit20_before_adverse10_rate"], float(th), len(hits)))
+            threshold_candidates.append((mm["hit20_any_rate"], mm["mean_capped_upside20"], float(th), len(hits)))
         if not threshold_candidates:
             continue
         threshold_candidates.sort(reverse=True)
-        _, _, _, th, _ = threshold_candidates[0]
+        _, _, th, _ = threshold_candidates[0]
         bundle = RFBundle(arch, imp, clf, th)
         bundles[arch] = bundle
 
@@ -388,6 +415,37 @@ def selected_alerts(candidates: pd.DataFrame, selected_simple: pd.DataFrame, sel
         frames.append(a)
 
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+
+
+def enrich_selected_alerts(alerts: pd.DataFrame, data: dict[str, tuple[pd.DataFrame, pd.DataFrame]]) -> pd.DataFrame:
+    if alerts.empty:
+        return alerts
+    out = alerts.copy()
+    time_maps = {}
+    for symbol in out.symbol.unique():
+        if symbol not in data:
+            continue
+        df, _ = data[symbol]
+        time_maps[symbol] = (df, pd.Series(df.index.to_numpy(), index=pd.to_datetime(df.time, utc=True)).to_dict())
+
+    detailed = []
+    for _, row in out.iterrows():
+        symbol = row.symbol
+        if symbol not in time_maps:
+            detailed.append({})
+            continue
+        df, idx = time_maps[symbol]
+        ei = idx.get(pd.Timestamp(row.entry_time))
+        if ei is None:
+            detailed.append({})
+            continue
+        detailed.append(entry_path_metrics_full(df, int(ei), float(row.entry_price)))
+
+    for i, d in enumerate(detailed):
+        for k, v in d.items():
+            out.at[out.index[i], k] = v
+    return out
 
 
 def summary_with_frequency(alerts: pd.DataFrame) -> pd.DataFrame:
@@ -527,6 +585,7 @@ def main():
     selected_models.to_csv(OUT / "selected_models.csv", index=False)
 
     alerts = selected_alerts(candidates, selected_simple, selected_models, bundles)
+    alerts = enrich_selected_alerts(alerts, data)
     alerts.to_csv(OUT / "causal_entry_alerts.csv.gz", index=False, compression="gzip")
     summary = summary_with_frequency(alerts)
     summary.to_csv(OUT / "causal_entry_summary.csv", index=False)
