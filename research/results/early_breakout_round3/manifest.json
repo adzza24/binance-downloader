@@ -1,0 +1,91 @@
+{
+  "study": "Early Breakout Round 3 - signal quality and confirmation",
+  "status": "RESEARCH ONLY - no live task/strategy edits",
+  "entry_source": "Frozen Round 1 mechanical Early Breakout operationalisation",
+  "target": "+20% within 7 days after candidate entry before touching -7%",
+  "checkpoints_hours": [
+    0,
+    4,
+    8,
+    12,
+    24
+  ],
+  "temporal_split": {
+    "train": "2019-2022",
+    "validation": "2023-2024",
+    "holdout": "2025-2026 through dataset end"
+  },
+  "model": {
+    "type": "RandomForestClassifier",
+    "n_estimators": 400,
+    "max_depth": 5,
+    "min_samples_leaf": 25,
+    "class_weight": "balanced",
+    "threshold_selection": "Highest validation +20% precision subject to >=50 selected and >=5% coverage; holdout untouched."
+  },
+  "exit_variants": [
+    "FULL_TRAIL_7",
+    "HALF20_RUNNER_7",
+    "LADDER10_20_RUNNER_7",
+    "FIXED10_5",
+    "FIXED20_7"
+  ],
+  "runner": "7% initial stop; full runner moves to BE at +5%; runner variants use +10% minimum floor once peak >=+30%, then 60% accumulated-gain giveback; max 365d.",
+  "position_usdt": 300.0,
+  "costs": {
+    "fee_rate": 0.001,
+    "slippage_rate": 0.0005
+  },
+  "dataset": {
+    "start": "2019-01-01",
+    "end": "2026-08-31",
+    "interval": "1h",
+    "universe": [
+      "ETHUSDT",
+      "BNBUSDT",
+      "SOLUSDT",
+      "XRPUSDT",
+      "ADAUSDT",
+      "DOGEUSDT",
+      "LINKUSDT",
+      "AVAXUSDT",
+      "DOTUSDT",
+      "LTCUSDT",
+      "BCHUSDT",
+      "TRXUSDT",
+      "ATOMUSDT",
+      "NEARUSDT",
+      "APTUSDT",
+      "ARBUSDT",
+      "OPUSDT",
+      "INJUSDT",
+      "SUIUSDT",
+      "FETUSDT",
+      "RUNEUSDT",
+      "AAVEUSDT",
+      "UNIUSDT",
+      "CRVUSDT",
+      "CVXUSDT",
+      "ZECUSDT",
+      "AUCTIONUSDT",
+      "WLDUSDT",
+      "PEOPLEUSDT",
+      "COTIUSDT",
+      "SUNUSDT",
+      "GALAUSDT",
+      "SANDUSDT",
+      "MANAUSDT",
+      "FILUSDT",
+      "ETCUSDT",
+      "ICPUSDT",
+      "ALGOUSDT",
+      "VETUSDT",
+      "SYNUSDT",
+      "LSKUSDT",
+      "GUSDT",
+      "CELRUSDT",
+      "ONEUSDT"
+    ]
+  },
+  "success_hurdle": "Holdout mean P&L >=30 USDT on a 300 USDT trade (10%) after fees/slippage."
+}
