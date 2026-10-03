@@ -358,3 +358,123 @@ def build_checkpoint_samples(anchors: pd.DataFrame, data: dict[str, tuple[pd.Dat
                 rows.append(row)
     return pd.DataFrame(rows)
 
+
+def auc_direction(z: pd.DataFrame, feature: str) -> tuple[float,float]:
+    a=z[[feature,"anchor_label"]].dropna()
+    if len(a)<30 or a.anchor_label.nunique()<2: return np.nan,np.nan
+    y=(a.anchor_label=="WINNER").astype(int)
+    try: auc=roc_auc_score(y,a[feature])
+    except ValueError: return np.nan,np.nan
+    return max(float(auc),1-float(auc)), (1.0 if auc>=.5 else -1.0)
+
+
+def feature_contrasts(samples: pd.DataFrame) -> pd.DataFrame:
+    rows=[]
+    zall=samples[samples.within_5pct_entry]
+    for (arch,p,split),z in zall.groupby(["archetype","progress_level_pct","split"]):
+        if arch not in {"CAPITULATION","BASE"}: continue
+        for f in [x for x in MODEL_FEATURES if x!="hours_since_anchor"]:
+            w=pd.to_numeric(z.loc[z.anchor_label=="WINNER",f],errors="coerce").dropna()
+            h=pd.to_numeric(z.loc[z.anchor_label=="HARD_FAIL",f],errors="coerce").dropna()
+            if min(len(w),len(h))<15: continue
+            auc,dirn=auc_direction(z,f)
+            rows.append({"archetype":arch,"progress_level_pct":p,"split":split,"feature":f,
+                         "winner_n":len(w),"hard_fail_n":len(h),"winner_median":w.median(),"hard_fail_median":h.median(),
+                         "separation_auc":auc,"direction":dirn})
+    return pd.DataFrame(rows)
+
+
+def rule_masks(z: pd.DataFrame, arch: str) -> dict[str,pd.Series]:
+    if arch=="CAPITULATION":
+        return {
+            "GREEN_1H": z.ret_1h>0,
+            "GREEN_2H": z.ret_2h>0,
+            "REBOUND12_1": z.rebound_12h_low>=.01,
+            "REBOUND12_2": z.rebound_12h_low>=.02,
+            "EMA6_RECLAIM": z.close_vs_ema6>=0,
+            "PREV3H_RECLAIM": z.close_vs_prev3h_high>=0,
+            "GREEN_VOL125": (z.ret_1h>0)&(z.volume_ratio_current>=1.25),
+            "GREEN_TAKER52": (z.ret_1h>0)&(z.taker_buy_current>=.52),
+            "REBOUND2_VOL11": (z.rebound_12h_low>=.02)&(z.volume_ratio_3h>=1.10),
+            "MICRO_RECLAIM_VOL12": (z.close_vs_prev3h_high>=0)&(z.volume_ratio_current>=1.20),
+            "EMA6_TAKER51": (z.close_vs_ema6>=0)&(z.taker_buy_3h>=.51),
+            "GREEN_TRADE125": (z.ret_1h>0)&(z.trade_ratio_current>=1.25),
+        }
+    return {
+        "EXPAND3H_1": z.ret_3h>=.01,
+        "EXPAND3H_2": z.ret_3h>=.02,
+        "PREV6H_BREAK": z.close_vs_prev6h_high>=0,
+        "PREV12H_BREAK": z.close_vs_prev12h_high>=0,
+        "PREV24H_BREAK": z.close_vs_prev24h_high>=0,
+        "VOL_POP15": (z.volume_ratio_current>=1.50)&(z.ret_1h>0),
+        "VOL_TRADE13": (z.volume_ratio_current>=1.30)&(z.trade_ratio_current>=1.30)&(z.ret_1h>0),
+        "VOL6_EXPAND": (z.volume_ratio_6h>=1.20)&(z.ret_6h>0),
+        "BREAK6_VOL13": (z.close_vs_prev6h_high>=0)&(z.volume_ratio_current>=1.30),
+        "BREAK12_VOL13": (z.close_vs_prev12h_high>=0)&(z.volume_ratio_current>=1.30),
+        "TAKER_BREAK6": (z.close_vs_prev6h_high>=0)&(z.taker_buy_current>=.52),
+        "RISING_LOW_EXPAND": (z.low24_vs_prev24>0)&(z.ret_3h>=.01),
+    }
+
+
+def metric_row(sel: pd.DataFrame, all_z: pd.DataFrame, anchors: pd.DataFrame, cfg: dict) -> dict:
+    win_ret, loss_ret = net_binary_returns(cfg)
+    total_winners = anchors[(anchors.anchor_label=="WINNER")].anchor_id.nunique()
+    total_hards = anchors[(anchors.anchor_label=="HARD_FAIL")].anchor_id.nunique()
+    sw=sel[sel.anchor_label=="WINNER"].anchor_id.nunique(); sh=sel[sel.anchor_label=="HARD_FAIL"].anchor_id.nunique()
+    p20=float(sel.hit20_before_stop5.mean()) if len(sel) else np.nan
+    return {
+        "selected":len(sel),"selected_winner_anchors":sw,"selected_hard_fail_anchors":sh,
+        "anchor_precision":float((sel.anchor_label=="WINNER").mean()) if len(sel) else np.nan,
+        "winner_recall":sw/total_winners if total_winners else np.nan,
+        "hard_fail_trigger_rate":sh/total_hards if total_hards else np.nan,
+        "entry_success20_precision":p20,
+        "hit10_rate":float(sel.hit10_before_stop5.mean()) if len(sel) else np.nan,
+        "hit30_rate":float(sel.hit30_before_stop5.mean()) if len(sel) else np.nan,
+        "hit50_rate":float(sel.hit50_before_stop5.mean()) if len(sel) else np.nan,
+        "binary20_stop5_net_expectancy_pct":p20*win_ret+(1-p20)*loss_ret if len(sel) else np.nan,
+        "median_entry_progress_pct":float(sel.entry_progress_pct.median()) if len(sel) else np.nan,
+        "median_hours_since_anchor":float(sel.hours_since_anchor.median()) if len(sel) else np.nan,
+        "median_success_mae_to20":float(sel.loc[sel.hit20_before_stop5==1,"post_entry_mae_to_20"].median()) if (sel.hit20_before_stop5==1).any() else np.nan,
+    }
+
+
+def evaluate_simple_rules(samples: pd.DataFrame, anchors: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    rows=[]; zall=samples[samples.within_5pct_entry].copy()
+    for arch in ["CAPITULATION","BASE"]:
+        for p in PROGRESS_LEVELS:
+            for split in ["DISCOVERY_2019_2022","VALIDATION_2023_2024","HOLDOUT_2025_2026"]:
+                z=zall[(zall.archetype==arch)&(zall.progress_level_pct==p)&(zall.split==split)]
+                aa=anchors[(anchors.archetype==arch)&(anchors.split==split)]
+                if z.empty or aa.empty: continue
+                for name,m in rule_masks(z,arch).items():
+                    row={"archetype":arch,"progress_level_pct":p,"split":split,"rule":name}
+                    row.update(metric_row(z[m.fillna(False)],z,aa,cfg)); rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def choose_simple(simple: pd.DataFrame) -> pd.DataFrame:
+    rows=[]
+    if simple.empty:
+        return pd.DataFrame(rows)
+    for arch in ["CAPITULATION","BASE"]:
+        d=simple[(simple.archetype==arch)&(simple.split=="DISCOVERY_2019_2022")].copy()
+        v=simple[(simple.archetype==arch)&(simple.split=="VALIDATION_2023_2024")].copy()
+        key=["archetype","progress_level_pct","rule"]
+        x=d.merge(v,on=key,suffixes=("_discovery","_validation"))
+        x=x[(x.selected_discovery>=40)&(x.selected_validation>=25)&(x.winner_recall_discovery>=.04)&(x.winner_recall_validation>=.03)]
+        if x.empty: continue
+        x=x.sort_values(["entry_success20_precision_validation","winner_recall_validation","binary20_stop5_net_expectancy_pct_validation"],ascending=False)
+        r=x.iloc[0]
+        rows.append({"archetype":arch,"progress_level_pct":float(r.progress_level_pct),"rule":r.rule,
+                     "validation_selected":int(r.selected_validation),"validation_precision20":float(r.entry_success20_precision_validation),
+                     "validation_winner_recall":float(r.winner_recall_validation),
+                     "validation_expectancy_pct":float(r.binary20_stop5_net_expectancy_pct_validation)})
+    return pd.DataFrame(rows)
+
+
+@dataclass
+class RFBundle:
+    archetype: str
+    progress: float
+    imputer: SimpleImputer
+    classifier: RandomForestClassifier
