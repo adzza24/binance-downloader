@@ -1,0 +1,4 @@
+symbol,kind,error
+HYPEUSDT,load,insufficient_history:0
+MARSCOINUSDT,load,insufficient_history:0
+牛来USDT,load,"UnicodeEncodeError('ascii', 'GET /data/spot/monthly/klines/牛来USDT/1h/牛来USDT-1h-2019-01.zip HTTP/1.1', 30, 32, 'ordinal not in range(128)')"

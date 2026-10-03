@@ -1,0 +1,53 @@
+{
+  "study": "Explosive Move Entry Discovery Round 3 - Entry Only",
+  "status": "RESEARCH ONLY - no live strategy or automation edits",
+  "history": {
+    "start": "2019-01-01",
+    "end": "2026-08-31",
+    "interval": "1h"
+  },
+  "universe": "Frozen Round 2 eligible top-50 universe; survivorship bias remains.",
+  "watch_logic": "Discovery-derived CAPITULATION/BASE context gates; evaluate every completed hour inside watch; next-hour open plus slippage; entry <=5% above watch anchor.",
+  "primary_target": "+20% reached at any time within 30d, regardless of interim drawdown.",
+  "primary_metrics": [
+    "hit5/10/20/30/50_any_30d",
+    "mfe_30d",
+    "mae_30d",
+    "capped_upside20",
+    "hours_to_targets",
+    "mae_before_20"
+  ],
+  "secondary_diagnostics": [
+    "hit20_before_adverse5",
+    "hit20_before_adverse10"
+  ],
+  "exit_policy": "None for training/selection. No fixed stop, trailing stop or profit-taking optimisation.",
+  "rf": {
+    "trees": 300,
+    "max_depth": 6,
+    "min_samples_leaf": 50,
+    "training": "2019-2022 causal watch-hours, deterministic max 4000 rows per symbol/archetype",
+    "thresholds": [
+      0.5,
+      0.55,
+      0.6,
+      0.65,
+      0.7,
+      0.75,
+      0.8,
+      0.85,
+      0.9,
+      0.925,
+      0.95,
+      0.97,
+      0.98,
+      0.99
+    ],
+    "selection": "2023-2024 validation only, >=25 alerts; rank +20-any then capped-upside then less-negative MAE"
+  },
+  "period_note": "2025-2026 is confirmation rather than untouched holdout because earlier research exposed the period.",
+  "costs": {
+    "fee_rate": 0.001,
+    "slippage_rate": 0.0005
+  }
+}
