@@ -51,8 +51,8 @@ def get_json(url):
         return json.loads(r.read().decode())
 
 def current_top100():
-    info=get_json("https://api.binance.com/api/v3/exchangeInfo")
-    tick=get_json("https://api.binance.com/api/v3/ticker/24hr")
+    info=get_json("https://data-api.binance.vision/api/v3/exchangeInfo")
+    tick=get_json("https://data-api.binance.vision/api/v3/ticker/24hr")
     ok={}
     for s in info["symbols"]:
         sym=s.get("symbol",""); base=s.get("baseAsset",""); quote=s.get("quoteAsset","")
