@@ -718,3 +718,128 @@ def write_analysis(universe: pd.DataFrame, anchors: pd.DataFrame, arch_summary: 
 
     lines += ["","## Validation-selected simple triggers","",
               "| Archetype | Progress | Rule | Validation selected | +20/-5 precision | Winner recall | Binary expectancy* |","|---|---:|---|---:|---:|---:|---:|"]
+    for _,r in selected_simple.iterrows():
+        lines.append(f"| {r.archetype} | {100*r.progress_level_pct:.0f}% | {r.rule} | {int(r.validation_selected)} | {100*r.validation_precision20:.1f}% | {100*r.validation_winner_recall:.1f}% | {100*r.validation_expectancy_pct:.1f}% |")
+    lines += ["","## Validation-selected model triggers","",
+              "| Archetype | Progress | Validation selected | +20/-5 precision | Winner recall | Binary expectancy* |","|---|---:|---:|---:|---:|---:|"]
+    for _,r in selected_models.iterrows():
+        lines.append(f"| {r.archetype} | {100*r.progress_level_pct:.0f}% | {int(r.validation_selected)} | {100*r.validation_precision20:.1f}% | {100*r.validation_winner_recall:.1f}% | {100*r.validation_expectancy_pct:.1f}% |")
+
+    lines += ["","## Untouched 2025-2026 matched-cohort results","",
+              "| Method | Archetype | Progress | Selected | +20/-5 precision | Winner recall | Median entry advance | Binary expectancy* |","|---|---|---:|---:|---:|---:|---:|---:|"]
+    for method,sel,table,keycols in [("SIMPLE",selected_simple,simple,["archetype","progress_level_pct","rule"]),("RF",selected_models,modelq,["archetype","progress_level_pct"])]:
+        for _,s in sel.iterrows():
+            q=table[(table.split=="HOLDOUT_2025_2026")&(table.archetype==s.archetype)&(table.progress_level_pct==s.progress_level_pct)]
+            if method=="SIMPLE": q=q[q.rule==s.rule]
+            if q.empty: continue
+            r=q.iloc[0]
+            lines.append(f"| {method} | {s.archetype} | {100*s.progress_level_pct:.0f}% | {int(r.selected)} | {100*r.entry_success20_precision:.1f}% | {100*r.winner_recall:.1f}% | {100*r.median_entry_progress_pct:.1f}% | {100*r.binary20_stop5_net_expectancy_pct:.1f}% |")
+
+    lines += ["","## Causal replay","",
+              "This replay does not start from hindsight event timestamps. It starts a watch only when the frozen discovery-era archetype gate becomes observable, evaluates the selected trigger once at its specified progress checkpoint, enters next-hour open, and applies no exit optimisation. This is the main false-alert stress test.","",
+              "| Method | Archetype | Split | Alerts/wk | False/wk | +20/-5 precision | Clean-event recall | Median captured lateness | Binary expectancy* |","|---|---|---|---:|---:|---:|---:|---:|---:|"]
+    if replay.empty:
+        lines.append("| - | - | - | - | - | - | - | - | - |")
+    else:
+        for _,r in replay.iterrows():
+            lines.append(f"| {r.method} | {r.archetype} | {r.split} | {r.alerts_per_week:.2f} | {r.false_alerts_per_week:.2f} | {100*r.precision20_before_stop5:.1f}% | {100*r.clean_event_recall:.1f}% | {100*r.median_event_entry_lateness_pct:.1f}% | {100*r.binary20_stop5_net_expectancy_pct:.1f}% |")
+
+    win_ret,loss_ret=net_binary_returns(cfg)
+    hurdle=(.10-loss_ret)/(win_ret-loss_ret)
+    lines += ["","## Interpretation guardrails","",
+              f"*Binary expectancy assumes every success exits at +20% and every non-success at -5%, with configured fee/slippage applied. Under that deliberately simple framework, roughly {100*hurdle:.1f}% +20-before--5 precision is required to clear a +10% mean net-return hurdle. It is an entry-quality diagnostic, not an optimised exit test.","",
+              "- Primary discrimination remains winner vs HARD FAIL, not winner vs random quiet periods.",
+              "- 2025-2026 was not used to choose rule, checkpoint, model threshold or watch-gate parameter.",
+              "- Whole-market replay includes ordinary non-event periods, so its false-alert rate is more realistic than matched-control precision.",
+              "- The frozen current-liquidity universe still has survivorship bias. Historical point-in-time liquidity reconstruction remains a later robustness task.",
+              "- No result is promoted to the live strategy by this workflow.",""]
+    (OUT/"ANALYSIS.md").write_text("\n".join(lines))
+
+
+def main():
+    cfg=json.loads(Path("research/config.json").read_text())
+    OUT.mkdir(parents=True,exist_ok=True)
+    universe=load_frozen_top50(); universe.to_csv(OUT/"universe.csv",index=False)
+    btc=load_symbol("BTCUSDT","1h",START,END)
+
+    data={}; failures=[]
+    def load_one(symbol: str):
+        df=load_symbol(symbol,"1h",START,END)
+        if len(df)<3000: return symbol,None,None,f"insufficient_history:{len(df)}"
+        return symbol,df,build_features(df,btc),None
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futs={ex.submit(load_one,s):s for s in universe.symbol}
+        for fut in as_completed(futs):
+            s=futs[fut]
+            try:
+                symbol,df,ff,err=fut.result()
+                if err: failures.append({"symbol":symbol,"kind":"load","error":err})
+                else: data[symbol]=(df,ff)
+                print(symbol,"rows",0 if df is None else len(df),err or "OK",flush=True)
+            except Exception as e:
+                failures.append({"symbol":s,"kind":"load","error":repr(e)}); print("ERROR",s,repr(e),flush=True)
+
+    anchors,recheck_fail=build_anchor_cohort(universe,data); failures.extend(recheck_fail)
+    arch_model,arch_summary=fit_archetypes(anchors)
+    anchors=assign_archetypes(anchors,arch_model)
+    anchors.to_csv(OUT/"anchor_cohort.csv",index=False)
+    arch_summary.to_csv(OUT/"archetype_summary.csv",index=False)
+
+    samples=build_checkpoint_samples(anchors,data,cfg)
+    samples.to_csv(OUT/"checkpoint_samples.csv.gz",index=False,compression="gzip")
+    feature_contrasts(samples).to_csv(OUT/"feature_contrasts.csv",index=False)
+
+    simple=evaluate_simple_rules(samples,anchors,cfg); simple.to_csv(OUT/"simple_rule_metrics.csv",index=False)
+    selected_simple=choose_simple(simple); selected_simple.to_csv(OUT/"selected_simple.csv",index=False)
+
+    modelq,imp,bundles=fit_rf_models(samples,anchors,cfg)
+    modelq.to_csv(OUT/"model_quality.csv",index=False); imp.to_csv(OUT/"model_feature_importance.csv",index=False)
+    selected_models=choose_models(modelq); selected_models.to_csv(OUT/"selected_models.csv",index=False)
+
+    gates=discovery_watch_gate_params(anchors,arch_model); gates.to_csv(OUT/"watch_gate_params.csv",index=False)
+    alerts,replay=run_causal_replay(universe,data,arch_model,gates,selected_simple,selected_models,bundles,anchors,cfg)
+    alerts.to_csv(OUT/"causal_replay_alerts.csv",index=False); replay.to_csv(OUT/"causal_replay_summary.csv",index=False)
+    if not alerts.empty:
+        alerts.assign(year=pd.to_datetime(alerts.entry_time,utc=True).dt.year).groupby(["method","archetype","split","year"]).agg(
+            alerts=("symbol","size"), precision20=("hit20_before_stop5","mean"),
+            mean_entry_progress_pct=("entry_progress_from_watch_pct","mean"),
+            median_hours_to_20=("hours_to_20_from_entry","median"),
+        ).reset_index().to_csv(OUT/"causal_replay_year_summary.csv",index=False)
+        alerts.groupby(["method","archetype","split","symbol"]).agg(
+            alerts=("symbol","size"), precision20=("hit20_before_stop5","mean"),
+            false_alerts=("hit20_before_stop5",lambda x:int((x==0).sum())),
+        ).reset_index().to_csv(OUT/"causal_replay_coin_summary.csv",index=False)
+    else:
+        pd.DataFrame().to_csv(OUT/"causal_replay_year_summary.csv",index=False)
+        pd.DataFrame().to_csv(OUT/"causal_replay_coin_summary.csv",index=False)
+    pd.DataFrame(failures).to_csv(OUT/"failures.csv",index=False)
+
+    write_analysis(universe,anchors,arch_summary,simple,selected_simple,modelq,selected_models,replay,cfg)
+    manifest={
+        "study":"Explosive Move Entry Discovery Round 2",
+        "status":"RESEARCH ONLY - no live strategy or automation edits",
+        "source":"Explosive Move Discovery Round 1 frozen universe/events/hard-failure samples",
+        "universe":"First 50 eligible pairs from Round 1 current-liquidity ranking after additional stablecoin/tokenised-equity/known-unavailable filtering; survivorship bias remains.",
+        "history":{"start":START,"end":END,"interval":"1h"},
+        "event_definition":{"target_pct":TARGET_PCT,"stop_pct":STOP_PCT,"max_hours":MAX_HOURS},
+        "hard_failure_recheck":"Round 1 HARD FAIL controls retained only if +5% occurs before a later -5% stop and +20% does not occur first.",
+        "archetypes":"KMeans(3) fitted on winsorised/standardised 2019-2022 winner context only; lowest median 30d-return cluster=CAPITULATION, highest=MOMENTUM, remaining=BASE. Momentum is not entry-modelled in this round.",
+        "progress_checkpoints_pct":[0,1,2,3,5],
+        "execution":"Decision at completed hourly close; entry at next hourly open plus configured slippage; entries above +5% from watch/event anchor excluded.",
+        "simple_rules":"Pre-specified interpretable reversal/reclaim rules for capitulation and price-expansion/participation rules for base.",
+        "model":{"type":"RandomForestClassifier","n_estimators":450,"max_depth":5,"min_samples_leaf":25,"class_weight":"balanced","fit":"2019-2022","threshold_selection":"2023-2024 validation only; max +20-before--5 precision subject to >=25 selected and >=3% clean-winner recall per checkpoint"},
+        "selection":"Best simple rule/checkpoint and RF checkpoint per archetype selected on 2023-2024 validation only. 2025-2026 untouched until reporting.",
+        "causal_replay":"Discovery-derived archetype radius/context gates create watches without hindsight event timestamps; validation-selected trigger evaluated once at its progress checkpoint; false alerts measured on all replay alerts.",
+        "watch_max_hours":{"CAPITULATION":72,"BASE":168},
+        "costs":{"fee_rate":cfg["fee_rate"],"slippage_rate":cfg["slippage_rate"]},
+        "economic_hurdle":"Approximately +10% mean net return per accepted trade; binary +20/-5 expectancy is reported as an entry-quality diagnostic only.",
+    }
+    (OUT/"manifest.json").write_text(json.dumps(manifest,indent=2))
+
+    print("UNIVERSE",len(universe),"LOADED",len(data),"ANCHORS",len(anchors),"SAMPLES",len(samples),"FAILURES",len(failures))
+    print("SELECTED SIMPLE\n",selected_simple.to_string(index=False))
+    print("SELECTED MODELS\n",selected_models.to_string(index=False))
+    print("REPLAY\n",replay.to_string(index=False) if not replay.empty else "none")
+
+if __name__=="__main__":
+    main()
