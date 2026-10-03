@@ -478,3 +478,123 @@ class RFBundle:
     progress: float
     imputer: SimpleImputer
     classifier: RandomForestClassifier
+    threshold: float
+
+
+def fit_rf_models(samples: pd.DataFrame, anchors: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame,pd.DataFrame,dict[tuple[str,float],RFBundle]]:
+    rows=[]; imps=[]; bundles={}; zall=samples[samples.within_5pct_entry].copy()
+    feats=[f for f in MODEL_FEATURES if f in zall.columns]
+    for arch in ["CAPITULATION","BASE"]:
+        for p in PROGRESS_LEVELS:
+            z=zall[(zall.archetype==arch)&(zall.progress_level_pct==p)].copy()
+            tr=z[z.split=="DISCOVERY_2019_2022"]; va=z[z.split=="VALIDATION_2023_2024"]; ho=z[z.split=="HOLDOUT_2025_2026"]
+            if min(len(tr),len(va))<80 or tr.hit20_before_stop5.nunique()<2 or va.hit20_before_stop5.nunique()<2: continue
+            imp=SimpleImputer(strategy="median")
+            Xtr=imp.fit_transform(tr[feats]); Xva=imp.transform(va[feats])
+            clf=RandomForestClassifier(n_estimators=450,max_depth=5,min_samples_leaf=25,class_weight="balanced",random_state=42,n_jobs=-1)
+            clf.fit(Xtr,tr.hit20_before_stop5)
+            pva=clf.predict_proba(Xva)[:,1]
+            winner_total=anchors[(anchors.archetype==arch)&(anchors.split=="VALIDATION_2023_2024")&(anchors.anchor_label=="WINNER")].anchor_id.nunique()
+            candidates=[]
+            for th in np.unique(np.quantile(pva,np.linspace(.50,.97,20))):
+                m=pva>=th; n=int(m.sum())
+                if n<25: continue
+                sel=va[m]; sw=sel[sel.anchor_label=="WINNER"].anchor_id.nunique(); recall=sw/winner_total if winner_total else 0
+                if recall<.03: continue
+                candidates.append((float(sel.hit20_before_stop5.mean()),recall,float(th),n))
+            if not candidates: continue
+            candidates.sort(key=lambda x:(x[0],x[1],x[3]),reverse=True)
+            _,_,th,_=candidates[0]
+            bundles[(arch,p)]=RFBundle(arch,p,imp,clf,th)
+            for split,frame in [("VALIDATION_2023_2024",va),("HOLDOUT_2025_2026",ho)]:
+                if frame.empty: continue
+                pp=clf.predict_proba(imp.transform(frame[feats]))[:,1]; sel=frame[pp>=th]
+                aa=anchors[(anchors.archetype==arch)&(anchors.split==split)]
+                row={"archetype":arch,"progress_level_pct":p,"split":split,"threshold":th,"samples":len(frame)}
+                row.update(metric_row(sel,frame,aa,cfg)); rows.append(row)
+            for f,v in zip(feats,clf.feature_importances_):
+                imps.append({"archetype":arch,"progress_level_pct":p,"feature":f,"importance":float(v)})
+    return pd.DataFrame(rows),pd.DataFrame(imps),bundles
+
+
+def choose_models(modelq: pd.DataFrame) -> pd.DataFrame:
+    rows=[]
+    if modelq.empty:
+        return pd.DataFrame(rows)
+    for arch in ["CAPITULATION","BASE"]:
+        v=modelq[(modelq.archetype==arch)&(modelq.split=="VALIDATION_2023_2024")].copy()
+        v=v[(v.selected>=25)&(v.winner_recall>=.03)]
+        if v.empty: continue
+        v=v.sort_values(["entry_success20_precision","winner_recall","binary20_stop5_net_expectancy_pct"],ascending=False)
+        r=v.iloc[0]
+        rows.append({"archetype":arch,"progress_level_pct":float(r.progress_level_pct),"threshold":float(r.threshold),
+                     "validation_selected":int(r.selected),"validation_precision20":float(r.entry_success20_precision),
+                     "validation_winner_recall":float(r.winner_recall),"validation_expectancy_pct":float(r.binary20_stop5_net_expectancy_pct)})
+    return pd.DataFrame(rows)
+
+
+def discovery_watch_gate_params(anchors: pd.DataFrame, arch_model: ArchModel) -> pd.DataFrame:
+    rows=[]
+    for arch in ["CAPITULATION","BASE"]:
+        g=anchors[(anchors.anchor_label=="WINNER")&(anchors.split=="DISCOVERY_2019_2022")&(anchors.archetype==arch)].copy()
+        if g.empty: continue
+        row={"archetype":arch,"radius_max":arch_model.radius_max.get(arch,np.nan),"discovery_winners":len(g)}
+        if arch=="CAPITULATION":
+            row.update({"ret6_max":g.ret_6h.quantile(.75),"ret24_max":g.ret_24h.quantile(.75),"range24_min":g.range_24h.quantile(.25)})
+        else:
+            row.update({"range7d_max":g.range_7d.quantile(.75),"atr7d_max":g.atr7d_pct.quantile(.75),
+                        "abs_ret30_max":g.ret_30d.abs().quantile(.75),"dist30_min":g.dist_30d_high.quantile(.10)})
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def apply_arch_to_feature_frame(ff: pd.DataFrame, model: ArchModel) -> pd.DataFrame:
+    out=ff.copy(); valid=out[ARCH_FEATURES].notna().sum(axis=1)>=len(ARCH_FEATURES)-1
+    out["rt_arch"]="UNKNOWN"; out["rt_arch_radius"]=np.nan
+    if valid.any():
+        z=_clip_arch(out.loc[valid],model.qlo,model.qhi)
+        X=model.scaler.transform(model.imputer.transform(z)); cl=model.kmeans.predict(X)
+        rr=np.linalg.norm(X-model.kmeans.cluster_centers_[cl],axis=1)
+        out.loc[valid,"rt_arch"]=[model.cluster_to_name[int(c)] for c in cl]
+        out.loc[valid,"rt_arch_radius"]=rr
+    return out
+
+
+def watch_gate(row: pd.Series, arch: str, params: pd.Series) -> bool:
+    if row.rt_arch!=arch or not np.isfinite(row.rt_arch_radius) or row.rt_arch_radius>params.radius_max:
+        return False
+    if arch=="CAPITULATION":
+        return bool(row.ret_6h<=params.ret6_max and row.ret_24h<=params.ret24_max and row.range_24h>=params.range24_min)
+    return bool(row.range_7d<=params.range7d_max and row.atr7d_pct<=params.atr7d_max and abs(row.ret_30d)<=params.abs_ret30_max and row.dist_30d_high>=params.dist30_min)
+
+
+def rule_pass_row(row: pd.Series, arch: str, rule: str) -> bool:
+    z=pd.DataFrame([row])
+    m=rule_masks(z,arch).get(rule)
+    return bool(m.iloc[0]) if m is not None and len(m) else False
+
+
+def replay_one(df: pd.DataFrame, ff: pd.DataFrame, arch: str, method: str, progress: float,
+               config: dict, params: pd.Series, cfg: dict, rf_bundle: RFBundle | None,
+               split: str) -> list[dict]:
+    slip=float(cfg["slippage_rate"]); feats=list(MODEL_FEATURES)
+    if split=="VALIDATION_2023_2024": y0,y1=2023,2024
+    else: y0,y1=2025,2026
+    mask=(pd.to_datetime(df.time,utc=True).dt.year>=y0)&(pd.to_datetime(df.time,utc=True).dt.year<=y1)
+    ids=np.flatnonzero(mask.to_numpy())
+    if len(ids)<2: return []
+    start=max(int(ids[0]),2160); end=min(int(ids[-1]),len(df)-2)
+    alerts=[]; i=start; cooldown_until=start
+    max_watch=72 if arch=="CAPITULATION" else 168
+    while i<=end:
+        if i<cooldown_until:
+            i+=1; continue
+        r=ff.iloc[i]
+        if not watch_gate(r,arch,params):
+            i+=1; continue
+        anchor_i=i; anchor=float(df.close.iloc[i]); deadline=min(end,i+max_watch); decision_i=None
+        if progress<=0:
+            decision_i=i
+        else:
+            for j in range(i+1,deadline+1):
+                if float(df.low.iloc[j])<=anchor*(1-STOP_PCT):
