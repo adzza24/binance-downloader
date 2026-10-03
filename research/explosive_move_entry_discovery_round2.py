@@ -118,3 +118,123 @@ def build_features(df: pd.DataFrame, btc: pd.DataFrame) -> pd.DataFrame:
     base_trades = x.trades.shift(1).rolling(72).mean()
     x["volume_ratio_current"] = x.volume / base_vol
     x["volume_ratio_3h"] = x.volume.rolling(3).mean() / base_vol
+    x["volume_ratio_6h"] = x.volume.rolling(6).mean() / base_vol
+    x["volume_ratio_24h"] = x.volume.rolling(24).mean() / base_vol
+    x["trade_ratio_current"] = x.trades / base_trades
+    x["trade_ratio_3h"] = x.trades.rolling(3).mean() / base_trades
+    x["trade_ratio_6h"] = x.trades.rolling(6).mean() / base_trades
+    taker = x.taker_buy_base / x.volume.replace(0, np.nan)
+    x["taker_buy_current"] = taker
+    x["taker_buy_3h"] = taker.rolling(3).mean()
+    x["taker_buy_6h"] = taker.rolling(6).mean()
+    x["quote_volume_24h_log"] = np.log1p(x.quote_volume.rolling(24).sum())
+
+    x["rs_24h"] = x.ret_24h - b.pct_change(24)
+    x["rs_7d"] = x.ret_7d - b.pct_change(168)
+    x["rs_30d"] = x.ret_30d - b.pct_change(720)
+
+    for span in [6, 12, 24]:
+        ema = c.ewm(span=span, adjust=False).mean()
+        x[f"close_vs_ema{span}"] = c / ema - 1
+    for n in [3, 6, 12, 24]:
+        prev_hi = h.shift(1).rolling(n).max()
+        x[f"close_vs_prev{n}h_high"] = c / prev_hi - 1
+
+    low24 = l.rolling(24).min(); prev24 = l.shift(24).rolling(24).min()
+    x["low24_vs_prev24"] = low24 / prev24 - 1
+    x["green_body_pct"] = c / o - 1
+    candle_range = (h-l).replace(0, np.nan)
+    x["close_location"] = (c-l) / candle_range
+    x["lower_wick_share"] = (np.minimum(o,c)-l) / candle_range
+    return x.reset_index()
+
+
+def conservative_anchor_path(df: pd.DataFrame, start_i: int, max_hours: int = MAX_HOURS) -> dict:
+    anchor = float(df.close.iloc[start_i])
+    end = min(len(df), start_i + max_hours + 1)
+    first5 = None; target20 = None; stop = None
+    for j in range(start_i + 1, end):
+        lo = float(df.low.iloc[j]); hi = float(df.high.iloc[j])
+        if lo <= anchor * (1 - STOP_PCT):
+            stop = j
+            break
+        if first5 is None and hi >= anchor * 1.05:
+            first5 = j
+        if hi >= anchor * 1.20:
+            target20 = j
+            break
+    if target20 is not None:
+        label = "WINNER"
+    elif first5 is not None and stop is not None:
+        label = "HARD_FAIL"
+    else:
+        label = "OTHER"
+    return {"path_label": label, "first5_index": first5, "target20_index": target20, "stop_index": stop}
+
+
+def first_progress_index(df: pd.DataFrame, start_i: int, pct: float) -> int | None:
+    if pct <= 0:
+        return start_i
+    anchor = float(df.close.iloc[start_i])
+    end = min(len(df), start_i + MAX_HOURS + 1)
+    for j in range(start_i + 1, end):
+        if float(df.low.iloc[j]) <= anchor * (1 - STOP_PCT):
+            return None
+        if float(df.high.iloc[j]) >= anchor * (1 + pct):
+            return j
+    return None
+
+
+def outcome_from_entry(df: pd.DataFrame, entry_i: int, entry: float) -> dict:
+    end = min(len(df), entry_i + MAX_HOURS)
+    targets = {10: entry*1.10, 20: entry*1.20, 30: entry*1.30, 50: entry*1.50}
+    hit = {10: False, 20: False, 30: False, 50: False}
+    hit_idx = {10: None, 20: None, 30: None, 50: None}
+    stop_idx = None; min_low = entry; max_high = entry; mae_to_20 = np.nan; hit20_idx = None
+    for j in range(entry_i, end):
+        lo = float(df.low.iloc[j]); hi = float(df.high.iloc[j])
+        min_low = min(min_low, lo); max_high = max(max_high, hi)
+        # Conservative treatment of same-hour target/stop ambiguity.
+        if lo <= entry * (1 - STOP_PCT):
+            stop_idx = j
+            break
+        for p in [10,20,30,50]:
+            if not hit[p] and hi >= targets[p]:
+                hit[p] = True; hit_idx[p] = j
+                if p == 20:
+                    hit20_idx = j
+                    mae_to_20 = min_low / entry - 1
+    return {
+        "hit10_before_stop5": int(hit[10]), "hit20_before_stop5": int(hit[20]),
+        "hit30_before_stop5": int(hit[30]), "hit50_before_stop5": int(hit[50]),
+        "entry_stop_index": stop_idx, "entry_hit20_index": hit20_idx,
+        "post_entry_mae_to_20": mae_to_20,
+        "post_entry_mfe_30d": max_high / entry - 1,
+        "post_entry_mae_30d": min_low / entry - 1,
+        "hours_to_10_from_entry": (hit_idx[10]-entry_i) if hit_idx[10] is not None else np.nan,
+        "hours_to_20_from_entry": (hit_idx[20]-entry_i) if hit_idx[20] is not None else np.nan,
+        "hours_to_30_from_entry": (hit_idx[30]-entry_i) if hit_idx[30] is not None else np.nan,
+        "hours_to_50_from_entry": (hit_idx[50]-entry_i) if hit_idx[50] is not None else np.nan,
+    }
+
+
+def net_binary_returns(cfg: dict) -> tuple[float, float]:
+    fee = float(cfg["fee_rate"]); slip = float(cfg["slippage_rate"])
+    win = 1.20 * (1-slip) * (1-fee) - 1 - fee
+    loss = 0.95 * (1-slip) * (1-fee) - 1 - fee
+    return float(win), float(loss)
+
+
+@dataclass
+class ArchModel:
+    qlo: pd.Series
+    qhi: pd.Series
+    imputer: SimpleImputer
+    scaler: StandardScaler
+    kmeans: KMeans
+    cluster_to_name: dict[int, str]
+    radius_max: dict[str, float]
+
+
+def _clip_arch(frame: pd.DataFrame, qlo: pd.Series, qhi: pd.Series) -> pd.DataFrame:
+    z = frame[ARCH_FEATURES].copy()
