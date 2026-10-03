@@ -1,0 +1,55 @@
+name: Early Breakout Round 3 Signal Quality
+
+on:
+  push:
+    paths:
+      - 'research/early_breakout_round3.py'
+      - '.github/workflows/early-breakout-round3.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  round3:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Restore Binance archive cache
+        uses: actions/cache@v4
+        with:
+          path: research/cache/binance
+          key: early-breakout-binance-v1-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            early-breakout-binance-v1-${{ runner.os }}-
+      - name: Install dependencies
+        run: pip install pandas numpy requests scikit-learn
+      - name: Run Early Breakout Round 3
+        run: python research/early_breakout_round3.py
+      - name: Show analysis
+        run: |
+          cat research/results/early_breakout_round3/ANALYSIS.md
+          echo '--- model_quality.csv ---'
+          cat research/results/early_breakout_round3/model_quality.csv
+          echo '--- strategy_summary.csv ---'
+          cat research/results/early_breakout_round3/strategy_summary.csv
+      - name: Persist Round 3 results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research/results/early_breakout_round3/
+          git commit -m "Store Early Breakout Round 3 results"
+          git pull --rebase origin master
+          git push origin HEAD:master
+      - name: Upload Round 3 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: early-breakout-round3-signal-quality
+          path: research/results/early_breakout_round3/
+          retention-days: 90
