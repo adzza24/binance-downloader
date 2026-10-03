@@ -1,0 +1,59 @@
+name: Explosive Move Entry Discovery Round 2
+
+on:
+  push:
+    paths:
+      - 'research/explosive_move_entry_discovery_round2.py'
+      - '.github/workflows/explosive-move-entry-discovery-round2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  entry-discovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Restore Binance archive cache
+        uses: actions/cache@v4
+        with:
+          path: research/cache/binance
+          key: explosive-move-entry-round2-v1-\${{ runner.os }}-\${{ github.run_id }}
+          restore-keys: |
+            explosive-move-entry-round2-v1-\${{ runner.os }}-
+            explosive-move-binance-v1-\${{ runner.os }}-
+            early-breakout-binance-v1-\${{ runner.os }}-
+      - name: Install dependencies
+        run: pip install pandas numpy requests numba scikit-learn
+      - name: Run entry discovery
+        run: python research/explosive_move_entry_discovery_round2.py
+      - name: Show analysis
+        run: |
+          cat research/results/explosive_move_entry_discovery_round2/ANALYSIS.md
+          echo '--- selected_simple.csv ---'
+          cat research/results/explosive_move_entry_discovery_round2/selected_simple.csv
+          echo '--- selected_models.csv ---'
+          cat research/results/explosive_move_entry_discovery_round2/selected_models.csv
+          echo '--- causal_replay_summary.csv ---'
+          cat research/results/explosive_move_entry_discovery_round2/causal_replay_summary.csv
+      - name: Persist Round 2 results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research/results/explosive_move_entry_discovery_round2/
+          git commit -m "Store Explosive Move Entry Discovery Round 2 results"
+          git pull --rebase origin master
+          git push origin HEAD:master
+      - name: Upload Round 2 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: explosive-move-entry-discovery-round2
+          path: research/results/explosive_move_entry_discovery_round2/
+          retention-days: 90
