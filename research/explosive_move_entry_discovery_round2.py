@@ -238,3 +238,123 @@ class ArchModel:
 
 def _clip_arch(frame: pd.DataFrame, qlo: pd.Series, qhi: pd.Series) -> pd.DataFrame:
     z = frame[ARCH_FEATURES].copy()
+    for f in ARCH_FEATURES:
+        z[f] = pd.to_numeric(z[f], errors="coerce").clip(qlo[f], qhi[f])
+    return z
+
+
+def fit_archetypes(anchor_features: pd.DataFrame) -> tuple[ArchModel, pd.DataFrame]:
+    tr = anchor_features[(anchor_features.anchor_label=="WINNER") & (anchor_features.split=="DISCOVERY_2019_2022")].copy()
+    if len(tr) < 100:
+        raise RuntimeError(f"Too few discovery winners for archetypes: {len(tr)}")
+    qlo = tr[ARCH_FEATURES].quantile(.01); qhi = tr[ARCH_FEATURES].quantile(.99)
+    z = _clip_arch(tr, qlo, qhi)
+    imp = SimpleImputer(strategy="median"); sc = StandardScaler()
+    X = sc.fit_transform(imp.fit_transform(z))
+    km = KMeans(n_clusters=3, random_state=42, n_init=30).fit(X)
+    tr = tr.copy(); tr["cluster"] = km.labels_
+    med = tr.groupby("cluster")["ret_30d"].median().sort_values()
+    cap = int(med.index[0]); mom = int(med.index[-1]); base = int([c for c in med.index if c not in {cap,mom}][0])
+    mapping = {cap:"CAPITULATION", base:"BASE", mom:"MOMENTUM"}
+    dists = np.linalg.norm(X - km.cluster_centers_[km.labels_], axis=1)
+    tr["arch_name"] = [mapping[int(c)] for c in km.labels_]
+    tr["arch_radius"] = dists
+    radius_max = {a: float(g.arch_radius.quantile(.80)) for a,g in tr.groupby("arch_name")}
+    summary = tr.groupby(["cluster","arch_name"]).agg(
+        discovery_winners=("anchor_id","size"), median_ret_30d=("ret_30d","median"),
+        median_range_14d=("range_14d","median"), median_range_30d=("range_30d","median"),
+        median_atr7d_pct=("atr7d_pct","median"), median_worst_4h_ret_14d=("worst_4h_ret_14d","median"),
+        median_dist_30d_high=("dist_30d_high","median"), radius_80pct=("arch_radius",lambda s: s.quantile(.80)),
+    ).reset_index()
+    return ArchModel(qlo,qhi,imp,sc,km,mapping,radius_max), summary
+
+
+def assign_archetypes(frame: pd.DataFrame, model: ArchModel) -> pd.DataFrame:
+    out = frame.copy()
+    z = _clip_arch(out, model.qlo, model.qhi)
+    X = model.scaler.transform(model.imputer.transform(z))
+    clusters = model.kmeans.predict(X)
+    radii = np.linalg.norm(X - model.kmeans.cluster_centers_[clusters], axis=1)
+    out["arch_cluster"] = clusters
+    out["archetype"] = [model.cluster_to_name[int(c)] for c in clusters]
+    out["arch_radius"] = radii
+    return out
+
+
+def build_anchor_cohort(universe: pd.DataFrame, data: dict[str, tuple[pd.DataFrame,pd.DataFrame]]) -> tuple[pd.DataFrame, list[dict]]:
+    symbols = set(universe.symbol)
+    events = pd.read_csv(R1 / "events.csv")
+    events = events[events.symbol.isin(symbols)].copy()
+    events["start_time"] = pd.to_datetime(events.start_time, utc=True)
+    prec = pd.read_csv(R1 / "precursor_samples.csv.gz", compression="gzip")
+    hard = prec[(prec.label=="HARD_FAIL") & (prec.lead_hours==0) & (prec.symbol.isin(symbols))][["symbol","pseudo_start_time","event_id"]].drop_duplicates(["symbol","pseudo_start_time"])
+    hard["pseudo_start_time"] = pd.to_datetime(hard.pseudo_start_time, utc=True)
+
+    rows=[]; failures=[]
+    for symbol in universe.symbol:
+        if symbol not in data:
+            continue
+        df, ff = data[symbol]
+        idx = pd.Series(df.index.to_numpy(), index=df.time).to_dict()
+        for _,e in events[events.symbol==symbol].iterrows():
+            i = idx.get(pd.Timestamp(e.start_time))
+            if i is None: continue
+            path = conservative_anchor_path(df, int(i))
+            if path["path_label"] != "WINNER":
+                failures.append({"symbol":symbol,"kind":"winner_recheck","time":str(e.start_time),"result":path["path_label"]})
+                continue
+            r = ff.iloc[int(i)]
+            row={"anchor_id":str(e.event_id),"source_event_id":str(e.event_id),"symbol":symbol,"anchor_label":"WINNER",
+                 "anchor_time":pd.Timestamp(df.time.iloc[int(i)]),"anchor_index":int(i),"anchor_price":float(df.close.iloc[int(i)]),
+                 "year":int(pd.Timestamp(df.time.iloc[int(i)]).year),"split":split_name(int(pd.Timestamp(df.time.iloc[int(i)]).year)),
+                 "first5_index":path["first5_index"],"target20_index":path["target20_index"],"stop_index":path["stop_index"]}
+            for f in ARCH_FEATURES + ["ret_6h","ret_24h","range_24h","range_7d"]:
+                row[f]=float(r[f]) if pd.notna(r[f]) else np.nan
+            rows.append(row)
+        for _,e in hard[hard.symbol==symbol].iterrows():
+            i = idx.get(pd.Timestamp(e.pseudo_start_time))
+            if i is None: continue
+            path = conservative_anchor_path(df, int(i))
+            if path["path_label"] != "HARD_FAIL":
+                continue
+            r=ff.iloc[int(i)]
+            aid=f"HARD:{symbol}:{pd.Timestamp(df.time.iloc[int(i)]).isoformat()}"
+            row={"anchor_id":aid,"source_event_id":str(e.event_id),"symbol":symbol,"anchor_label":"HARD_FAIL",
+                 "anchor_time":pd.Timestamp(df.time.iloc[int(i)]),"anchor_index":int(i),"anchor_price":float(df.close.iloc[int(i)]),
+                 "year":int(pd.Timestamp(df.time.iloc[int(i)]).year),"split":split_name(int(pd.Timestamp(df.time.iloc[int(i)]).year)),
+                 "first5_index":path["first5_index"],"target20_index":path["target20_index"],"stop_index":path["stop_index"]}
+            for f in ARCH_FEATURES + ["ret_6h","ret_24h","range_24h","range_7d"]:
+                row[f]=float(r[f]) if pd.notna(r[f]) else np.nan
+            rows.append(row)
+    a=pd.DataFrame(rows).drop_duplicates("anchor_id")
+    return a, failures
+
+
+def build_checkpoint_samples(anchors: pd.DataFrame, data: dict[str, tuple[pd.DataFrame,pd.DataFrame]], cfg: dict) -> pd.DataFrame:
+    rows=[]; slip=float(cfg["slippage_rate"])
+    for symbol,g in anchors.groupby("symbol"):
+        if symbol not in data: continue
+        df,ff=data[symbol]
+        for _,a in g.iterrows():
+            start_i=int(a.anchor_index); anchor=float(a.anchor_price)
+            for p in PROGRESS_LEVELS:
+                di=first_progress_index(df,start_i,p)
+                if di is None or di+1>=len(df): continue
+                ei=di+1; entry=float(df.open.iloc[ei])*(1+slip)
+                entry_progress=entry/anchor-1
+                r=ff.iloc[di]
+                row={
+                    "anchor_id":a.anchor_id,"source_event_id":a.source_event_id,"symbol":symbol,
+                    "anchor_label":a.anchor_label,"archetype":a.archetype,"arch_radius":a.arch_radius,
+                    "split":a.split,"year":int(a.year),"anchor_time":a.anchor_time,
+                    "decision_time":pd.Timestamp(df.time.iloc[di]),"entry_time":pd.Timestamp(df.time.iloc[ei]),
+                    "progress_level_pct":p,"hours_since_anchor":int(di-start_i),"entry_price":entry,
+                    "entry_progress_pct":entry_progress,"within_5pct_entry":bool(entry_progress<=.05),
+                }
+                for f in MODEL_FEATURES:
+                    if f=="hours_since_anchor": continue
+                    v=r[f]; row[f]=float(v) if pd.notna(v) else np.nan
+                row.update(outcome_from_entry(df,ei,entry))
+                rows.append(row)
+    return pd.DataFrame(rows)
+
