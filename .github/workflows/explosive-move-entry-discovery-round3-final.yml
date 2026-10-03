@@ -1,0 +1,60 @@
+name: Explosive Move Entry Discovery Round 3 Entry Only
+
+on:
+  push:
+    paths:
+      - 'research/explosive_move_entry_discovery_round3_final.py'
+      - '.github/workflows/explosive-move-entry-discovery-round3-final.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  research:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Restore Binance cache
+        uses: actions/cache@v4
+        with:
+          path: research/cache/binance
+          key: explosive-move-entry-round3-entry-only-${{ runner.os }}-${{ hashFiles('research/explosive_move_entry_discovery_round3_final.py', 'research/explosive_move_entry_discovery_round2.py') }}
+          restore-keys: |
+            explosive-move-entry-round3-${{ runner.os }}-
+            explosive-move-entry-round2-${{ runner.os }}-
+            explosive-move-${{ runner.os }}-
+            early-breakout-${{ runner.os }}-
+      - name: Install dependencies
+        run: pip install pandas numpy requests numba scikit-learn
+      - name: Run entry-only discovery
+        run: python research/explosive_move_entry_discovery_round3_final.py
+      - name: Show analysis
+        if: always()
+        run: |
+          cat research/results/explosive_move_entry_discovery_round3_entry_only/ANALYSIS.md || true
+          echo
+          cat research/results/explosive_move_entry_discovery_round3_entry_only/causal_entry_summary.csv || true
+      - name: Persist Round 3 entry-only results
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research/results/explosive_move_entry_discovery_round3_entry_only
+          git diff --cached --quiet && exit 0
+          git commit -m "Store Explosive Move Entry Discovery Round 3 entry-only results"
+          git pull --rebase origin master
+          git push origin master
+      - name: Upload Round 3 entry-only artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: explosive-move-entry-discovery-round3-entry-only
+          path: research/results/explosive_move_entry_discovery_round3_entry_only
+          retention-days: 90
