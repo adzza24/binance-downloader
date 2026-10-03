@@ -13,7 +13,7 @@ from sklearn.impute import SimpleImputer
 import explosive_move_entry_discovery_round2 as r2
 from binance_data import load_symbol
 
-OUT = Path("research/results/explosive_move_entry_discovery_round3")
+OUT = Path("research/results/explosive_move_entry_discovery_round3_final")
 START = r2.START
 END = r2.END
 MAX_HOURS = r2.MAX_HOURS
@@ -228,8 +228,10 @@ def build_causal_watch_candidates(universe: pd.DataFrame, data: dict[str, tuple[
 
 def simple_trigger(row: pd.Series, arch: str, rule: str) -> bool:
     if rule == "REBOUND2_VOL11":
+        return bool(row.rebound_12h_low >= 0.02 and row.volume_ratio_3h >= 1.10)
+    if rule == "WATCH_REBOUND2_VOL11":
         return bool(row.rebound_from_watch_low >= 0.02 and row.volume_ratio_3h >= 1.10)
-    if rule == "REBOUND1_VOL11":
+    if rule == "WATCH_REBOUND1_VOL11":
         return bool(row.rebound_from_watch_low >= 0.01 and row.volume_ratio_3h >= 1.10)
     if rule == "REBOUND2_TRADE11":
         return bool(row.rebound_from_watch_low >= 0.02 and row.trade_ratio_3h >= 1.10)
@@ -247,7 +249,7 @@ def simple_trigger(row: pd.Series, arch: str, rule: str) -> bool:
 
 
 SIMPLE_RULES = {
-    "CAPITULATION": ["REBOUND2_VOL11", "REBOUND1_VOL11", "REBOUND2_TRADE11", "EMA6_RECLAIM_VOL11", "BREAK3_VOL12"],
+    "CAPITULATION": ["REBOUND2_VOL11", "WATCH_REBOUND2_VOL11", "WATCH_REBOUND1_VOL11", "REBOUND2_TRADE11", "EMA6_RECLAIM_VOL11", "BREAK3_VOL12"],
     "BASE": ["EXPAND3_VOL12", "BREAK3_VOL12", "BREAK6_VOL13", "VOL_TRADE13", "EMA6_RECLAIM_VOL11"],
 }
 
