@@ -1,0 +1,47 @@
+{
+  "study": "Explosive Move Entry Discovery Round 2",
+  "status": "RESEARCH ONLY - no live strategy or automation edits",
+  "source": "Explosive Move Discovery Round 1 frozen universe/events/hard-failure samples",
+  "universe": "First 50 eligible pairs from Round 1 current-liquidity ranking after additional stablecoin/tokenised-equity/known-unavailable filtering; survivorship bias remains.",
+  "history": {
+    "start": "2019-01-01",
+    "end": "2026-08-31",
+    "interval": "1h"
+  },
+  "event_definition": {
+    "target_pct": 0.2,
+    "stop_pct": 0.05,
+    "max_hours": 720
+  },
+  "hard_failure_recheck": "Round 1 HARD FAIL controls retained only if +5% occurs before a later -5% stop and +20% does not occur first.",
+  "archetypes": "KMeans(3) fitted on winsorised/standardised 2019-2022 winner context only; lowest median 30d-return cluster=CAPITULATION, highest=MOMENTUM, remaining=BASE. Momentum is not entry-modelled in this round.",
+  "progress_checkpoints_pct": [
+    0,
+    1,
+    2,
+    3,
+    5
+  ],
+  "execution": "Decision at completed hourly close; entry at next hourly open plus configured slippage; entries above +5% from watch/event anchor excluded.",
+  "simple_rules": "Pre-specified interpretable reversal/reclaim rules for capitulation and price-expansion/participation rules for base.",
+  "model": {
+    "type": "RandomForestClassifier",
+    "n_estimators": 450,
+    "max_depth": 5,
+    "min_samples_leaf": 25,
+    "class_weight": "balanced",
+    "fit": "2019-2022",
+    "threshold_selection": "2023-2024 validation only; max +20-before--5 precision subject to >=25 selected and >=3% clean-winner recall per checkpoint"
+  },
+  "selection": "Best simple rule/checkpoint and RF checkpoint per archetype selected on 2023-2024 validation only. 2025-2026 untouched until reporting.",
+  "causal_replay": "Discovery-derived archetype radius/context gates create watches without hindsight event timestamps; validation-selected trigger evaluated once at its progress checkpoint; false alerts measured on all replay alerts.",
+  "watch_max_hours": {
+    "CAPITULATION": 72,
+    "BASE": 168
+  },
+  "costs": {
+    "fee_rate": 0.001,
+    "slippage_rate": 0.0005
+  },
+  "economic_hurdle": "Approximately +10% mean net return per accepted trade; binary +20/-5 expectancy is reported as an entry-quality diagnostic only."
+}

@@ -1,0 +1,3 @@
+archetype,progress_level_pct,rule,validation_selected,validation_precision20,validation_winner_recall,validation_expectancy_pct
+CAPITULATION,0.0,REBOUND12_1,39,0.6666666666666666,0.8235294117647058,0.11399222500000003
+BASE,0.01,VOL_TRADE13,1683,0.16339869281045752,0.3333333333333333,-0.011636105882352886
