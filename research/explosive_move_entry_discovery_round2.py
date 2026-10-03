@@ -598,3 +598,123 @@ def replay_one(df: pd.DataFrame, ff: pd.DataFrame, arch: str, method: str, progr
         else:
             for j in range(i+1,deadline+1):
                 if float(df.low.iloc[j])<=anchor*(1-STOP_PCT):
+                    break
+                if float(df.high.iloc[j])>=anchor*(1+progress):
+                    decision_i=j; break
+        if decision_i is None:
+            i=deadline+1; cooldown_until=i+24; continue
+        row=ff.iloc[decision_i]; passed=False; prob=np.nan
+        if method=="SIMPLE":
+            passed=rule_pass_row(row,arch,config["rule"])
+        else:
+            if rf_bundle is not None:
+                one=pd.DataFrame([{f:(float(row[f]) if f!="hours_since_anchor" and pd.notna(row[f]) else (decision_i-anchor_i if f=="hours_since_anchor" else np.nan)) for f in feats}])
+                prob=float(rf_bundle.classifier.predict_proba(rf_bundle.imputer.transform(one[feats]))[0,1])
+                passed=prob>=rf_bundle.threshold
+        if passed and decision_i+1<len(df):
+            ei=decision_i+1; entry=float(df.open.iloc[ei])*(1+slip); adv=entry/anchor-1
+            if adv<=.05:
+                out=outcome_from_entry(df,ei,entry)
+                alerts.append({"method":method,"archetype":arch,"split":split,"symbol":str(config["symbol"]),
+                               "watch_start":pd.Timestamp(df.time.iloc[anchor_i]),"decision_time":pd.Timestamp(df.time.iloc[decision_i]),
+                               "entry_time":pd.Timestamp(df.time.iloc[ei]),"watch_anchor_price":anchor,"entry_price":entry,
+                               "progress_level_pct":progress,"entry_progress_from_watch_pct":adv,
+                               "hours_watch_to_entry":decision_i-anchor_i,"model_probability":prob,**out})
+                i=decision_i+1; cooldown_until=i+72; continue
+        i=decision_i+1; cooldown_until=i+24
+    return alerts
+
+
+def link_alerts_to_events(alerts: pd.DataFrame, anchors: pd.DataFrame) -> pd.DataFrame:
+    if alerts.empty: return alerts
+    out=alerts.copy(); out["captured_event_id"]=""; out["event_entry_lateness_pct"]=np.nan
+    winners=anchors[anchors.anchor_label=="WINNER"].copy()
+    for idx,r in out.iterrows():
+        g=winners[(winners.symbol==r.symbol)&(winners.archetype==r.archetype)&(winners.split==r.split)]
+        if g.empty: continue
+        t=pd.Timestamp(r.decision_time)
+        cands=[]
+        for _,e in g.iterrows():
+            if pd.Timestamp(e.anchor_time)<=t:
+                first5_time=None
+                if pd.notna(e.first5_index):
+                    # first5_index is symbol-local and not directly timestamped here; approximate with hours from the stored frame later unavailable.
+                    hours5=(int(e.first5_index)-int(e.anchor_index))
+                    first5_time=pd.Timestamp(e.anchor_time)+pd.Timedelta(hours=hours5)
+                if first5_time is not None and t<=first5_time:
+                    lateness=float(r.entry_price)/float(e.anchor_price)-1
+                    if lateness<=.05: cands.append((abs(lateness),e.anchor_id,lateness))
+        if cands:
+            cands.sort(); _,eid,late=cands[0]
+            out.at[idx,"captured_event_id"]=eid; out.at[idx,"event_entry_lateness_pct"]=late
+    return out
+
+
+def replay_summary(alerts: pd.DataFrame, anchors: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    rows=[]; win_ret,loss_ret=net_binary_returns(cfg)
+    for (method,arch,split),g in alerts.groupby(["method","archetype","split"]):
+        if split=="VALIDATION_2023_2024": start,end=pd.Timestamp("2023-01-01",tz="UTC"),pd.Timestamp("2024-12-31 23:00",tz="UTC")
+        else: start,end=pd.Timestamp("2025-01-01",tz="UTC"),pd.Timestamp("2026-08-31 23:00",tz="UTC")
+        weeks=(end-start).total_seconds()/(7*24*3600)
+        clean=anchors[(anchors.anchor_label=="WINNER")&(anchors.archetype==arch)&(anchors.split==split)].anchor_id.nunique()
+        captured=g.loc[g.captured_event_id!="","captured_event_id"].nunique()
+        p20=float(g.hit20_before_stop5.mean()) if len(g) else np.nan
+        coin_share=float(g.symbol.value_counts(normalize=True).iloc[0]) if len(g) else np.nan
+        rows.append({"method":method,"archetype":arch,"split":split,"alerts":len(g),"alerts_per_week":len(g)/weeks,
+                     "false_alerts":int((g.hit20_before_stop5==0).sum()),"false_alerts_per_week":float((g.hit20_before_stop5==0).sum()/weeks),
+                     "precision20_before_stop5":p20,"hit10_rate":g.hit10_before_stop5.mean(),"hit30_rate":g.hit30_before_stop5.mean(),"hit50_rate":g.hit50_before_stop5.mean(),
+                     "binary20_stop5_net_expectancy_pct":p20*win_ret+(1-p20)*loss_ret,
+                     "clean_events":clean,"captured_clean_events":captured,"clean_event_recall":captured/clean if clean else np.nan,
+                     "median_event_entry_lateness_pct":g.loc[g.captured_event_id!="","event_entry_lateness_pct"].median(),
+                     "median_success_mae_to20":g.loc[g.hit20_before_stop5==1,"post_entry_mae_to_20"].median(),
+                     "median_hours_to_20":g.loc[g.hit20_before_stop5==1,"hours_to_20_from_entry"].median(),
+                     "max_coin_alert_share":coin_share})
+    return pd.DataFrame(rows)
+
+
+def run_causal_replay(universe: pd.DataFrame, data: dict[str, tuple[pd.DataFrame,pd.DataFrame]], arch_model: ArchModel,
+                      gate_params: pd.DataFrame, selected_simple: pd.DataFrame, selected_models: pd.DataFrame,
+                      bundles: dict[tuple[str,float],RFBundle], anchors: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame,pd.DataFrame]:
+    all_alerts=[]; params_map={r.archetype:r for _,r in gate_params.iterrows()}
+    configs=[]
+    for _,r in selected_simple.iterrows():
+        configs.append(("SIMPLE",r.archetype,float(r.progress_level_pct),{"rule":r.rule}))
+    for _,r in selected_models.iterrows():
+        configs.append(("RF",r.archetype,float(r.progress_level_pct),{"threshold":float(r.threshold)}))
+    for symbol in universe.symbol:
+        if symbol not in data: continue
+        df,ff0=data[symbol]; ff=apply_arch_to_feature_frame(ff0,arch_model)
+        for method,arch,p,c in configs:
+            if arch not in params_map: continue
+            cc=dict(c); cc["symbol"]=symbol
+            rb=bundles.get((arch,p)) if method=="RF" else None
+            for split in ["VALIDATION_2023_2024","HOLDOUT_2025_2026"]:
+                all_alerts.extend(replay_one(df,ff,arch,method,p,cc,params_map[arch],cfg,rb,split))
+    alerts=pd.DataFrame(all_alerts)
+    if alerts.empty: return alerts,pd.DataFrame()
+    alerts=link_alerts_to_events(alerts,anchors)
+    return alerts,replay_summary(alerts,anchors,cfg)
+
+
+def write_analysis(universe: pd.DataFrame, anchors: pd.DataFrame, arch_summary: pd.DataFrame,
+                   simple: pd.DataFrame, selected_simple: pd.DataFrame, modelq: pd.DataFrame,
+                   selected_models: pd.DataFrame, replay: pd.DataFrame, cfg: dict) -> None:
+    lines=["# Explosive Move Entry Discovery Round 2","",
+           "**Status:** RESEARCH ONLY. No Early Breakout automation or Crypto Live Strategy Specification changes.","",
+           "## Design","",
+           "Round 2 keeps the Round 1 clean-event definition (+20% before -5%, maximum 30 days) but tests causal entry decisions separately for CAPITULATION/REVERSAL and BASE/ACCUMULATION. The Round 1 all-period cluster IDs are not reused: archetypes are refit using 2019-2022 discovery winners only, then frozen for 2023-2026 assignment.","",
+           "The primary matched comparison is winner vs same-symbol/year HARD FAIL controls from Round 1, with hard controls rechecked to require +5% before a later -5% stop and no +20% first. Candidate decisions are observed at the first 0%, +1%, +2%, +3% and +5% progress checkpoints; decisions use only data known at that hourly close and entries occur at the next hourly open plus configured slippage.","",
+           "Simple interpretable reversal/expansion rules are tested first. A shallow Random Forest is then fitted on discovery only; probability thresholds/checkpoints are selected on 2023-2024 validation. 2025-2026 is only reported after selection. A separate whole-history causal replay starts watches from discovery-derived archetype gates and measures real alert frequency and false alerts.","",
+           f"Frozen Round 1 ranking was filtered to the first {len(universe)} eligible pairs after removing stablecoins, known unavailable pairs, leveraged-token patterns and identified tokenised-equity symbols.","",
+           "## Anchor cohort","",
+           "| Archetype | Split | Winners | Hard failures |","|---|---|---:|---:|"]
+    ac=anchors[anchors.archetype.isin(["CAPITULATION","BASE"])].groupby(["archetype","split","anchor_label"]).size().unstack(fill_value=0).reset_index()
+    for _,r in ac.iterrows():
+        lines.append(f"| {r.archetype} | {r.split} | {int(r.get('WINNER',0))} | {int(r.get('HARD_FAIL',0))} |")
+    lines += ["","## Discovery-only archetype fit","",
+              "| Cluster | Name | Discovery winners | Median 30d return | Median 14d range | Median 7d ATR |","|---:|---|---:|---:|---:|---:|"]
+    for _,r in arch_summary.iterrows():
+        lines.append(f"| {int(r.cluster)} | {r.arch_name} | {int(r.discovery_winners)} | {100*r.median_ret_30d:.1f}% | {100*r.median_range_14d:.1f}% | {100*r.median_atr7d_pct:.2f}% |")
+
+    lines += ["","## Validation-selected simple triggers","",
+              "| Archetype | Progress | Rule | Validation selected | +20/-5 precision | Winner recall | Binary expectancy* |","|---|---:|---|---:|---:|---:|---:|"]
