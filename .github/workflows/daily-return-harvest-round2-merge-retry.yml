@@ -1,0 +1,94 @@
+name: Daily Return Harvest Round 2 Merge Retry
+
+on:
+  push:
+    paths:
+      - 'research/daily_return_harvest_round2_merge_retry.py'
+      - '.github/workflows/daily-return-harvest-round2-merge-retry.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  merge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pandas numpy numba pyarrow tabulate
+
+      - name: Download completed universe
+        uses: actions/download-artifact@v4
+        with:
+          name: drh2-universe
+          path: research/results/daily_return_harvest/round2_event_discovery/parallel
+          repository: adzza24/binance-downloader
+          run-id: 37228155785
+          github-token: ${{ github.token }}
+
+      - name: Download completed shard checkpoints
+        uses: actions/download-artifact@v4
+        with:
+          pattern: drh2-shard-*
+          path: research/cache/daily_return_harvest_round2/merge_shards
+          merge-multiple: false
+          repository: adzza24/binance-downloader
+          run-id: 37228155785
+          github-token: ${{ github.token }}
+
+      - name: Merge, build canonical dataset and mine intersections
+        run: |
+          python research/daily_return_harvest_round2_merge_retry.py \
+            --shard-root research/cache/daily_return_harvest_round2/merge_shards \
+            --universe research/results/daily_return_harvest/round2_event_discovery/parallel/universe.csv
+
+      - name: Show analysis
+        run: |
+          cat research/results/daily_return_harvest/round2_event_discovery/ANALYSIS.md
+          echo
+          head -30 research/results/daily_return_harvest/round2_event_discovery/intersections.csv || true
+          echo
+          cat research/results/daily_return_harvest/round2_event_discovery/baseline_rates.csv || true
+
+      - name: Persist reusable Round 2 dataset and analysis
+        run: |
+          OUT=research/results/daily_return_harvest/round2_event_discovery
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for f in \
+            ANALYSIS.md manifest.json events.csv events_enriched.csv.gz condition_dictionary.csv \
+            univariate_conditions.csv intersections.csv feature_comparison.csv \
+            baseline_rates.csv failures.csv; do
+            if [ -f "$OUT/$f" ]; then
+              size=$(stat -c%s "$OUT/$f")
+              if [ "$size" -lt 95000000 ]; then git add "$OUT/$f"; fi
+            fi
+          done
+          if [ -d "$OUT/dataset_v1" ]; then
+            find "$OUT/dataset_v1" -type f -print0 | while IFS= read -r -d '' f; do
+              size=$(stat -c%s "$f")
+              if [ "$size" -lt 95000000 ]; then git add "$f"; else echo "Skipping >95MB: $f"; fi
+            done
+          fi
+          git diff --cached --quiet && exit 0
+          git commit -m "Store reusable Daily Return Harvest Round 2 dataset"
+          git pull --rebase origin master
+          git push origin master
+
+      - name: Upload full Round 2 artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-return-harvest-round2-merge-retry-full
+          path: research/results/daily_return_harvest/round2_event_discovery
+          retention-days: 90
