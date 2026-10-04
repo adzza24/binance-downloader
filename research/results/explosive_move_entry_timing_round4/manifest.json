@@ -1,0 +1,31 @@
+{
+  "study": "Explosive Move Entry Timing Round 4",
+  "status": "RESEARCH ONLY - no live strategy or automation edits",
+  "fixed_round3_rf_thresholds": {
+    "CAPITULATION": 0.55,
+    "BASE": 0.8
+  },
+  "timing_rules": [
+    "IMMEDIATE",
+    "GREEN_2H",
+    "EMA6_RECLAIM",
+    "EMA12_RECLAIM",
+    "BREAK3",
+    "BREAK6",
+    "POSTQUAL_REBOUND1",
+    "POSTQUAL_REBOUND2",
+    "POSTQUAL_REBOUND2_VOL11",
+    "POSTQUAL_REBOUND2_BREAK3",
+    "POSTQUAL_REBOUND1_EMA6",
+    "RF_STRENGTHEN_005",
+    "RF_STRENGTHEN_010"
+  ],
+  "entry_constraint": "Delayed entry must be <=5% above the lowest low observed since RF qualification.",
+  "selection": "2023-2024 validation; require >=40% of immediate alert count (minimum 8) and preferably +20-any within 10pp of immediate; maximise +20-before--5, then less-negative MAE, +20-any, capture.",
+  "exit_policy": "No exit optimisation. +20-before--5 and +20-before--10 are path-ordering diagnostics only.",
+  "confirmation_note": "2025-2026 is previously exposed confirmation data, not pristine holdout.",
+  "costs": {
+    "fee_rate": 0.001,
+    "slippage_rate": 0.0005
+  }
+}

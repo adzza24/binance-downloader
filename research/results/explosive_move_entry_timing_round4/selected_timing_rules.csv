@@ -1,0 +1,3 @@
+archetype,rule,validation_alerts,validation_capture_vs_immediate,validation_hit20_any_rate,validation_hit20_before_adverse5_rate,validation_median_mae_30d,validation_median_delay_hours,baseline_hit20_any_rate,baseline_hit20_before_adverse5_rate,baseline_median_mae_30d
+CAPITULATION,RF_STRENGTHEN_005,11,0.44,1.0,0.7272727272727273,-0.045657893944593964,0.0,0.96,0.6,-0.05067151463638253
+BASE,POSTQUAL_REBOUND1,16,0.5517241379310345,0.875,0.5625,-0.08689276511768951,0.0,0.9310344827586207,0.4827586206896552,-0.06874149132330387
