@@ -1,0 +1,66 @@
+name: Explosive Move Recall Round 3
+
+on:
+  push:
+    branches:
+      - round-3
+    paths:
+      - 'research/explosive_move_recall_round3.py'
+      - '.github/workflows/explosive-move-recall-round3.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  research:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout round-3 branch
+        uses: actions/checkout@v4
+        with:
+          ref: round-3
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Restore Binance cache
+        uses: actions/cache@v4
+        with:
+          path: research/cache/binance
+          key: explosive-move-recall-round3-${{ runner.os }}-${{ hashFiles('research/explosive_move_recall_round3.py', 'research/explosive_move_discovery_round1.py') }}
+          restore-keys: |
+            explosive-move-entry-round3-${{ runner.os }}-
+            explosive-move-entry-round2-${{ runner.os }}-
+            explosive-move-${{ runner.os }}-
+            early-breakout-${{ runner.os }}-
+      - name: Install dependencies
+        run: pip install pandas numpy requests numba scikit-learn
+      - name: Run recall-first research
+        run: python research/explosive_move_recall_round3.py
+      - name: Show analysis
+        if: always()
+        run: |
+          cat research/results/explosive_move_recall_round3/ANALYSIS.md || true
+          echo
+          cat research/results/explosive_move_recall_round3/coverage_summary.csv || true
+          echo
+          cat research/results/explosive_move_recall_round3/episode_summary.csv || true
+      - name: Persist recall-first results to round-3 branch
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research/results/explosive_move_recall_round3
+          git diff --cached --quiet && exit 0
+          git commit -m "Store Explosive Move Recall Round 3 results"
+          git pull --rebase origin round-3
+          git push origin HEAD:round-3
+      - name: Upload recall-first artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: explosive-move-recall-round3
+          path: research/results/explosive_move_recall_round3
+          retention-days: 90
