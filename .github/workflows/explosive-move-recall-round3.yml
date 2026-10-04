@@ -13,6 +13,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: explosive-move-recall-round3
+  cancel-in-progress: true
+
 jobs:
   research:
     runs-on: ubuntu-24.04
@@ -41,6 +45,17 @@ jobs:
         run: pip install pandas numpy requests numba scikit-learn
       - name: Run recall-first research
         run: python research/explosive_move_recall_round3_retry.py
+      - name: Persist replay checkpoints
+        if: always()
+        run: |
+          if [ ! -d research/results/explosive_move_recall_round3/checkpoints ]; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research/results/explosive_move_recall_round3/checkpoints
+          git diff --cached --quiet && exit 0
+          git commit -m "Checkpoint Explosive Move Recall Round 3 replay"
+          git pull --rebase origin round-3
+          git push origin HEAD:round-3
       - name: Show analysis
         if: always()
         run: |
