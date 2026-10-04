@@ -1,0 +1,192 @@
+name: Daily Return Harvest Round 2 Parallel
+
+on:
+  push:
+    paths:
+      - 'research/daily_return_harvest_round2_parallel.py'
+      - '.github/workflows/daily-return-harvest-round2-parallel.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Restore Binance cache
+        uses: actions/cache/restore@v4
+        with:
+          path: research/cache/binance
+          key: drh2-binance-prepare-${{ runner.os }}
+          restore-keys: |
+            daily-return-harvest-round2-${{ runner.os }}-
+            daily-return-harvest-round1-${{ runner.os }}-
+            explosive-move-entry-round3-${{ runner.os }}-
+            explosive-move-entry-round2-${{ runner.os }}-
+            explosive-move-${{ runner.os }}-
+            early-breakout-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pip install pandas numpy numba pyarrow tabulate
+
+      - name: Syntax check
+        run: python -m py_compile research/daily_return_harvest_round2_parallel.py
+
+      - name: Prepare historical universe
+        run: python research/daily_return_harvest_round2_parallel.py prepare
+
+      - name: Upload universe
+        uses: actions/upload-artifact@v4
+        with:
+          name: drh2-universe
+          path: research/results/daily_return_harvest/round2_event_discovery/parallel
+          retention-days: 90
+
+  shard:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        shard: [0, 1, 2, 3]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download universe
+        uses: actions/download-artifact@v4
+        with:
+          name: drh2-universe
+          path: research/results/daily_return_harvest/round2_event_discovery/parallel
+
+      - name: Restore Binance cache
+        uses: actions/cache/restore@v4
+        with:
+          path: research/cache/binance
+          key: drh2-binance-shard-${{ matrix.shard }}-${{ runner.os }}
+          restore-keys: |
+            daily-return-harvest-round2-${{ runner.os }}-
+            daily-return-harvest-round1-${{ runner.os }}-
+            explosive-move-entry-round3-${{ runner.os }}-
+            explosive-move-entry-round2-${{ runner.os }}-
+            explosive-move-${{ runner.os }}-
+            early-breakout-${{ runner.os }}-
+
+      - name: Restore processed shard checkpoint
+        id: processed-cache
+        uses: actions/cache@v4
+        with:
+          path: research/cache/daily_return_harvest_round2/stage1_v1/shard-${{ matrix.shard }}
+          key: drh2-stage1-drh2-event-v1-20261004-shard-${{ matrix.shard }}
+
+      - name: Install dependencies
+        run: pip install pandas numpy numba pyarrow tabulate
+
+      - name: Process shard
+        run: |
+          python research/daily_return_harvest_round2_parallel.py shard \
+            --universe research/results/daily_return_harvest/round2_event_discovery/parallel/universe.csv \
+            --shard-index ${{ matrix.shard }} \
+            --shard-count 4 \
+            --out research/cache/daily_return_harvest_round2/stage1_v1/shard-${{ matrix.shard }}
+
+      - name: Upload shard checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: drh2-shard-${{ matrix.shard }}
+          path: research/cache/daily_return_harvest_round2/stage1_v1/shard-${{ matrix.shard }}
+          retention-days: 90
+
+  merge:
+    needs: [prepare, shard]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pandas numpy numba pyarrow tabulate
+
+      - name: Download universe
+        uses: actions/download-artifact@v4
+        with:
+          name: drh2-universe
+          path: research/results/daily_return_harvest/round2_event_discovery/parallel
+
+      - name: Download shard checkpoints
+        uses: actions/download-artifact@v4
+        with:
+          pattern: drh2-shard-*
+          path: research/cache/daily_return_harvest_round2/merge_shards
+          merge-multiple: false
+
+      - name: Merge, build canonical dataset and mine intersections
+        run: |
+          python research/daily_return_harvest_round2_parallel.py merge \
+            --shard-root research/cache/daily_return_harvest_round2/merge_shards \
+            --universe research/results/daily_return_harvest/round2_event_discovery/parallel/universe.csv
+
+      - name: Show analysis
+        run: |
+          cat research/results/daily_return_harvest/round2_event_discovery/ANALYSIS.md
+          echo
+          head -30 research/results/daily_return_harvest/round2_event_discovery/intersections.csv || true
+          echo
+          cat research/results/daily_return_harvest/round2_event_discovery/baseline_rates.csv || true
+
+      - name: Persist reusable Round 2 dataset and analysis
+        run: |
+          OUT=research/results/daily_return_harvest/round2_event_discovery
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for f in \
+            ANALYSIS.md manifest.json universe.csv candidate_pool_liquidity.csv \
+            events.csv events_enriched.csv.gz condition_dictionary.csv \
+            univariate_conditions.csv intersections.csv feature_comparison.csv \
+            baseline_rates.csv failures.csv; do
+            if [ -f "$OUT/$f" ]; then
+              size=$(stat -c%s "$OUT/$f")
+              if [ "$size" -lt 95000000 ]; then git add "$OUT/$f"; fi
+            fi
+          done
+          if [ -d "$OUT/dataset_v1" ]; then
+            find "$OUT/dataset_v1" -type f -print0 | while IFS= read -r -d '' f; do
+              size=$(stat -c%s "$f")
+              if [ "$size" -lt 95000000 ]; then git add "$f"; else echo "Skipping >95MB: $f"; fi
+            done
+          fi
+          git diff --cached --quiet && exit 0
+          git commit -m "Store reusable Daily Return Harvest Round 2 dataset"
+          git pull --rebase origin master
+          git push origin master
+
+      - name: Upload full Round 2 artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-return-harvest-round2-parallel-full
+          path: research/results/daily_return_harvest/round2_event_discovery
+          retention-days: 90
