@@ -1,0 +1,83 @@
+name: Daily Return Harvest Round 2 Event Discovery
+
+on:
+  push:
+    paths:
+      - 'research/daily_return_harvest_round2_event_discovery.py'
+      - '.github/workflows/daily-return-harvest-round2-event-discovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  research:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Restore Binance cache
+        uses: actions/cache@v4
+        with:
+          path: research/cache/binance
+          key: daily-return-harvest-round2-${{ runner.os }}-${{ hashFiles('research/daily_return_harvest_round2_event_discovery.py') }}
+          restore-keys: |
+            daily-return-harvest-round1-${{ runner.os }}-
+            explosive-move-entry-round3-${{ runner.os }}-
+            explosive-move-entry-round2-${{ runner.os }}-
+            explosive-move-${{ runner.os }}-
+            early-breakout-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pip install pandas numpy numba tabulate
+
+      - name: Syntax check
+        run: python -m py_compile research/daily_return_harvest_round2_event_discovery.py
+
+      - name: Run Daily Return Harvest Round 2
+        run: python research/daily_return_harvest_round2_event_discovery.py
+
+      - name: Show analysis
+        if: always()
+        run: |
+          cat research/results/daily_return_harvest/round2_event_discovery/ANALYSIS.md || true
+          echo
+          head -30 research/results/daily_return_harvest/round2_event_discovery/intersections.csv || true
+          echo
+          cat research/results/daily_return_harvest/round2_event_discovery/baseline_rates.csv || true
+
+      - name: Persist compact Round 2 results
+        if: success()
+        run: |
+          OUT=research/results/daily_return_harvest/round2_event_discovery
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for f in \
+            ANALYSIS.md manifest.json universe.csv candidate_pool_liquidity.csv \
+            events.csv events_enriched.csv.gz condition_dictionary.csv \
+            univariate_conditions.csv intersections.csv feature_comparison.csv \
+            baseline_rates.csv failures.csv; do
+            if [ -f "$OUT/$f" ]; then
+              size=$(stat -c%s "$OUT/$f")
+              if [ "$size" -lt 95000000 ]; then git add "$OUT/$f"; fi
+            fi
+          done
+          git diff --cached --quiet && exit 0
+          git commit -m "Store Daily Return Harvest Round 2 results"
+          git pull --rebase origin master
+          git push origin master
+
+      - name: Upload full Round 2 artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-return-harvest-round2-event-discovery
+          path: research/results/daily_return_harvest/round2_event_discovery
+          retention-days: 90
