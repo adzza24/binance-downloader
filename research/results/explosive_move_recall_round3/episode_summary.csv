@@ -1,0 +1,4 @@
+split,episodes,episodes_with_any_capture,episode_any_recall,market_wide_episodes,market_wide_any_recall,median_episode_event_recall
+CONFIRMATION_2025_2026,214,214,1.0,177,1.0,1.0
+DISCOVERY_2019_2022,413,411,0.9951573849878934,305,1.0,1.0
+VALIDATION_2023_2024,241,241,1.0,187,1.0,1.0

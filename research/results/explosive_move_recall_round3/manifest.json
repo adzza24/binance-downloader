@@ -1,0 +1,49 @@
+{
+  "study": "Explosive Move Recall Round 3",
+  "branch": "round-3",
+  "status": "RESEARCH ONLY - no live strategy or automation edits",
+  "source_events": "research/results/explosive_move_discovery_round1/events.csv",
+  "source_event_count": 8683,
+  "families": 3,
+  "family_method": "KMeans(3) fit only on 2019-2022 winner start features; CAPITULATION/BASE/MOMENTUM names assigned by discovery median 30d return.",
+  "model": "One RandomForestClassifier per family trained on 2019-2022 winner precursor snapshots vs same-family HARD_FAIL/RANDOM_CONTROL samples.",
+  "positive_leads_hours": [
+    0,
+    6,
+    12,
+    24,
+    72
+  ],
+  "threshold_selection": "Prefer 2023-2024 validation with >=80% event recall proxy then lowest control fire rate. If a family has no usable validation winner rows, use discovery-era threshold selection for that family only; never use 2025-2026 confirmation for selection.",
+  "causal_event_capture_window": "72h before original event start through +5% milestone.",
+  "alert_cooldown_hours_per_symbol_family": 24,
+  "episode_definition": "Fixed 48h windows starting from the first event in each episode; market-wide means >=3 symbols.",
+  "history": {
+    "start": "2019-01-01",
+    "end": "2026-08-31",
+    "interval": "1h"
+  },
+  "caveats": [
+    "Round 1 current-universe survivorship bias remains",
+    "2025-2026 is previously exposed confirmation data",
+    "event scoring windows use hindsight only to measure recall, never to generate alerts"
+  ],
+  "threshold_selection_sources": [
+    {
+      "family": "CAPITULATION",
+      "selection_source": "DISCOVERY_2019_2022_FALLBACK",
+      "threshold": 0.7
+    },
+    {
+      "family": "BASE",
+      "selection_source": "VALIDATION_2023_2024",
+      "threshold": 0.65
+    },
+    {
+      "family": "MOMENTUM",
+      "selection_source": "VALIDATION_2023_2024",
+      "threshold": 0.35
+    }
+  ],
+  "checkpointing": "Per-symbol causal replay checkpoints are written after each successful symbol and persisted to the isolated round-3 branch even if a later stage fails. Reruns reuse completed symbols."
+}
