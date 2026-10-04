@@ -1,0 +1,126 @@
+{
+  "study": "Daily Return Harvest Round 1",
+  "status": "RESEARCH ONLY - no live strategy or scheduled task changes",
+  "objective": "Discover frequent short-horizon long-only Binance spot edges suitable for later portfolio testing against a 5% net geometric daily stretch objective.",
+  "period": {
+    "start": "2021-01-01",
+    "end": "2026-09-30",
+    "interval": "1h"
+  },
+  "splits": {
+    "discovery": "2021-2023",
+    "validation": "2024-2025",
+    "holdout": "2026"
+  },
+  "universe": {
+    "selection": "Current top 120 eligible Binance USDT spot pairs by current 24h quote volume",
+    "historical_liquidity_gate_usdt_24h": 1000000.0,
+    "exclusions": [
+      "BBUSDT",
+      "BEUSDT",
+      "CFGUSDT",
+      "COWUSDT",
+      "ENSOUSDT",
+      "GMEUSDT",
+      "GPSUSDT",
+      "JTOUSDT",
+      "KAITOUSDT",
+      "KITEUSDT",
+      "KMNOUSDT",
+      "METUSDT",
+      "NIGHTUSDT",
+      "PROVEUSDT",
+      "PYPLUSDT",
+      "PYTHUSDT",
+      "RESOLVUSDT",
+      "REZUSDT",
+      "SOMIUSDT",
+      "STRKUSDT",
+      "TNSRUSDT",
+      "TUTUSDT",
+      "USUALUSDT",
+      "WLFIUSDT",
+      "WUSDT",
+      "XPLUSDT"
+    ],
+    "stable_bases": [
+      "AEUR",
+      "AUD",
+      "BFUSD",
+      "BIDR",
+      "BRL",
+      "BUSD",
+      "DAI",
+      "EUR",
+      "EURC",
+      "EURI",
+      "FDUSD",
+      "GBP",
+      "IDRT",
+      "NGN",
+      "PYUSD",
+      "RLUSD",
+      "RUB",
+      "TRY",
+      "TUSD",
+      "UAH",
+      "USD1",
+      "USDC",
+      "USDE",
+      "USDP",
+      "USDS",
+      "UST",
+      "USTC",
+      "VAI",
+      "XUSD",
+      "ZAR"
+    ],
+    "tokenised_equity_bases": [
+      "CRCLB",
+      "MSTRB",
+      "SPCXB"
+    ],
+    "known_limitation": "Current-liquidity selection causes survivorship/current-selection bias in older history."
+  },
+  "execution_assumptions": {
+    "decision": "completed 1h candle",
+    "entry": "next 1h open",
+    "fee_rate_each_side": 0.001,
+    "slippage_rate_each_side": 0.0005,
+    "target_stop_same_hour": "conservatively count stop first"
+  },
+  "signal_families": {
+    "MOMENTUM": "Short-horizon acceleration + BTC-relative strength + improving volume, capped for extension.",
+    "PULLBACK_RECLAIM": "Already-strong asset pulls back 1-6% from 12h high, then reclaims short EMA on a green candle.",
+    "FRESH_EXPANSION": "Compressed 24h volatility, near prior 24h high, first price/volume/trade/taker expansion without large extension."
+  },
+  "forward_horizons_hours": [
+    1,
+    3,
+    6,
+    12,
+    24,
+    48
+  ],
+  "targets": [
+    0.01,
+    0.02,
+    0.03,
+    0.05,
+    0.075
+  ],
+  "stops": [
+    0.01,
+    0.015,
+    0.02,
+    0.03,
+    0.05
+  ],
+  "cooldown_hours_per_symbol_family": 6,
+  "important": [
+    "Round 1 is descriptive and permits overlapping signals.",
+    "Do not infer a live strategy or 5%/day portfolio result from this round.",
+    "Shortlisted signals should receive 15m execution-path validation before exit optimisation.",
+    "No Crypto Live Strategy Specification or automation is read or modified."
+  ]
+}
