@@ -1,0 +1,70 @@
+name: Daily Return Harvest Round 1
+
+on:
+  push:
+    paths:
+      - 'research/daily_return_harvest_round1.py'
+      - '.github/workflows/daily-return-harvest-round1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  research:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Restore Binance cache
+        uses: actions/cache@v4
+        with:
+          path: research/cache/binance
+          key: daily-return-harvest-round1-${{ runner.os }}-${{ hashFiles('research/daily_return_harvest_round1.py', 'research/binance_data.py') }}
+          restore-keys: |
+            daily-return-harvest-round1-${{ runner.os }}-
+            explosive-move-entry-round4-${{ runner.os }}-
+            explosive-move-entry-round3-${{ runner.os }}-
+            explosive-move-${{ runner.os }}-
+            early-breakout-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pip install pandas numpy
+
+      - name: Run Daily Return Harvest Round 1
+        run: python research/daily_return_harvest_round1.py
+
+      - name: Show analysis
+        if: always()
+        run: |
+          cat research/results/daily_return_harvest/round1/ANALYSIS.md || true
+          echo
+          cat research/results/daily_return_harvest/round1/family_summary.csv || true
+          echo
+          cat research/results/daily_return_harvest/round1/top_candidate_summary.csv || true
+
+      - name: Persist Round 1 results
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research/results/daily_return_harvest/round1
+          git diff --cached --quiet && exit 0
+          git commit -m "Store Daily Return Harvest Round 1 results"
+          git pull --rebase origin master
+          git push origin master
+
+      - name: Upload Round 1 artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-return-harvest-round1
+          path: research/results/daily_return_harvest/round1
+          retention-days: 90
