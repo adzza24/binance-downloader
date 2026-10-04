@@ -6,6 +6,7 @@ on:
       - round-3
     paths:
       - 'research/explosive_move_recall_round3.py'
+      - 'research/explosive_move_recall_round3_retry.py'
       - '.github/workflows/explosive-move-recall-round3.yml'
   workflow_dispatch:
 
@@ -29,8 +30,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: research/cache/binance
-          key: explosive-move-recall-round3-${{ runner.os }}-${{ hashFiles('research/explosive_move_recall_round3.py', 'research/explosive_move_discovery_round1.py') }}
+          key: explosive-move-recall-round3-${{ runner.os }}-${{ hashFiles('research/explosive_move_recall_round3_retry.py', 'research/explosive_move_recall_round3.py', 'research/explosive_move_discovery_round1.py') }}
           restore-keys: |
+            explosive-move-recall-round3-${{ runner.os }}-
             explosive-move-entry-round3-${{ runner.os }}-
             explosive-move-entry-round2-${{ runner.os }}-
             explosive-move-${{ runner.os }}-
@@ -38,7 +40,7 @@ jobs:
       - name: Install dependencies
         run: pip install pandas numpy requests numba scikit-learn
       - name: Run recall-first research
-        run: python research/explosive_move_recall_round3.py
+        run: python research/explosive_move_recall_round3_retry.py
       - name: Show analysis
         if: always()
         run: |
