@@ -1,0 +1,197 @@
+name: Daily Return Harvest Round 2 Staged Merge
+
+on:
+  push:
+    paths:
+      - 'research/daily_return_harvest_round2_staged_merge.py'
+      - '.github/workflows/daily-return-harvest-round2-staged-merge.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  SOURCE_RUN_ID: '37228155785'
+
+jobs:
+  context:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pandas numpy numba pyarrow tabulate
+
+      - name: Syntax check
+        run: python -m py_compile research/daily_return_harvest_round2_staged_merge.py
+
+      - name: Download completed universe
+        uses: actions/download-artifact@v4
+        with:
+          name: drh2-universe
+          path: research/cache/drh2_stage3/source_universe
+          repository: adzza24/binance-downloader
+          run-id: ${{ env.SOURCE_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Download completed expensive shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: drh2-shard-*
+          path: research/cache/drh2_stage3/source_shards
+          merge-multiple: false
+          repository: adzza24/binance-downloader
+          run-id: ${{ env.SOURCE_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Build global cross-sectional context
+        run: |
+          python research/daily_return_harvest_round2_staged_merge.py context \
+            --shard-root research/cache/drh2_stage3/source_shards \
+            --universe-dir research/cache/drh2_stage3/source_universe \
+            --out research/cache/drh2_stage3/context
+
+      - name: Upload global context
+        uses: actions/upload-artifact@v4
+        with:
+          name: drh2-stage3-context
+          path: research/cache/drh2_stage3/context
+          retention-days: 90
+          compression-level: 3
+
+  canonical:
+    needs: context
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        shard: [0, 1, 2, 3]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pandas numpy numba pyarrow tabulate
+
+      - name: Download global context
+        uses: actions/download-artifact@v4
+        with:
+          name: drh2-stage3-context
+          path: research/cache/drh2_stage3/context
+
+      - name: Download source shard
+        uses: actions/download-artifact@v4
+        with:
+          name: drh2-shard-${{ matrix.shard }}
+          path: research/cache/drh2_stage3/source_shard
+          repository: adzza24/binance-downloader
+          run-id: ${{ env.SOURCE_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Build canonical shard in 5-symbol partitions
+        run: |
+          python research/daily_return_harvest_round2_staged_merge.py build-shard \
+            --shard-dir research/cache/drh2_stage3/source_shard \
+            --context-dir research/cache/drh2_stage3/context \
+            --out research/cache/drh2_stage3/canonical-${{ matrix.shard }}
+
+      - name: Upload canonical shard
+        uses: actions/upload-artifact@v4
+        with:
+          name: drh2-stage3-canonical-${{ matrix.shard }}
+          path: research/cache/drh2_stage3/canonical-${{ matrix.shard }}
+          retention-days: 90
+          compression-level: 3
+
+  analyse:
+    needs: [context, canonical]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pandas numpy numba pyarrow tabulate
+
+      - name: Download global context
+        uses: actions/download-artifact@v4
+        with:
+          name: drh2-stage3-context
+          path: research/cache/drh2_stage3/context
+
+      - name: Download canonical partitions
+        uses: actions/download-artifact@v4
+        with:
+          pattern: drh2-stage3-canonical-*
+          path: research/cache/drh2_stage3/canonical_parts
+          merge-multiple: false
+
+      - name: Mine intersections and build final reusable dataset
+        run: |
+          python research/daily_return_harvest_round2_staged_merge.py analyse \
+            --canonical-root research/cache/drh2_stage3/canonical_parts \
+            --context-dir research/cache/drh2_stage3/context
+
+      - name: Show analysis
+        run: |
+          cat research/results/daily_return_harvest/round2_event_discovery/ANALYSIS.md
+          echo
+          head -30 research/results/daily_return_harvest/round2_event_discovery/intersections.csv || true
+          echo
+          cat research/results/daily_return_harvest/round2_event_discovery/baseline_rates.csv || true
+
+      - name: Persist reusable Round 2 dataset and analysis
+        run: |
+          OUT=research/results/daily_return_harvest/round2_event_discovery
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for f in \
+            ANALYSIS.md manifest.json events.csv events_enriched.csv.gz \
+            event_candidates.csv.gz sample_index.csv.gz condition_matrix.csv.gz \
+            condition_dictionary.csv univariate_conditions.csv intersections.csv \
+            feature_comparison.csv baseline_rates.csv failures.csv; do
+            if [ -f "$OUT/$f" ]; then
+              size=$(stat -c%s "$OUT/$f")
+              if [ "$size" -lt 95000000 ]; then git add "$OUT/$f"; else echo "Skipping >95MB: $f"; fi
+            fi
+          done
+          if [ -d "$OUT/dataset_v1" ]; then
+            find "$OUT/dataset_v1" -type f -print0 | while IFS= read -r -d '' f; do
+              size=$(stat -c%s "$f")
+              if [ "$size" -lt 95000000 ]; then git add "$f"; else echo "Skipping >95MB: $f"; fi
+            done
+          fi
+          git diff --cached --quiet && exit 0
+          git commit -m "Store staged Daily Return Harvest Round 2 dataset"
+          git pull --rebase origin master
+          git push origin master
+
+      - name: Upload full staged Round 2 artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-return-harvest-round2-staged-full
+          path: research/results/daily_return_harvest/round2_event_discovery
+          retention-days: 90
+          compression-level: 3
