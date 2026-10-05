@@ -1,0 +1,47 @@
+{
+  "study_id": "R01",
+  "round_id": "001",
+  "name": "Trend Flush Reversal",
+  "data_start": "2022-11-01",
+  "test_start": "2023-01-01",
+  "development_end": "2024-07-01",
+  "validation_end": "2026-01-01",
+  "confirmation_end": "2026-10-01",
+  "interval": "1h",
+  "max_confirmation_hours": 4,
+  "primary_horizon_hours": 24,
+  "secondary_horizon_hours": 48,
+  "primary_target_pct": 0.03,
+  "stop_pcts": [0.01, 0.015, 0.02],
+  "secondary_target_pcts": [0.04, 0.05, 0.06],
+  "fee_rate_each_side": 0.001,
+  "slippage_rate_each_side": 0.0005,
+  "batch_size": 5,
+  "candidate_floor": {
+    "lower_wick_share": 0.25,
+    "wick_body_ratio": 1.0,
+    "range_atr": 1.15,
+    "drop_to_low_pct": -0.02,
+    "close_location": 0.40,
+    "min_quote_volume_24h": 1000000
+  },
+  "grid": {
+    "entry_variants": ["confirm_mid", "confirm_60"],
+    "lower_wick_share": [0.35, 0.45, 0.55],
+    "wick_body_ratio": [1.5, 2.0],
+    "range_atr": [1.5, 2.0],
+    "close_location": [0.55, 0.70],
+    "volume_ratio": [1.0, 1.5, 2.0],
+    "trend_score": [2, 3],
+    "support_filter": ["none", "near20d"],
+    "btc_filter": ["none", "not_bear"]
+  },
+  "selection": {
+    "min_validation_signals": 30,
+    "min_validation_signals_per_week": 0.5,
+    "shortlist_size": 10,
+    "acceptance_min_confirmation_signals": 30,
+    "acceptance_min_confirmation_signals_per_week": 1.0,
+    "acceptance_precision": 0.90
+  }
+}
