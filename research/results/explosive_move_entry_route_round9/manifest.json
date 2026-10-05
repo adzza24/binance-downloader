@@ -1,0 +1,8 @@
+{
+  "study": "Round 9 entry route",
+  "branch": "round-3",
+  "horizon_hours": 720,
+  "cost": 0.003,
+  "source": "Round 8 full-population signals",
+  "live_changes": false
+}
