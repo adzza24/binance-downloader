@@ -1,0 +1,10 @@
+{
+  "W3_ALL": {
+    "threshold": 0.49597275034920474,
+    "reason": "best precision >=0.5/day"
+  },
+  "EARLY3_ALLNEG": {
+    "threshold": 0.5508433001516617,
+    "reason": "best precision >=0.5/day"
+  }
+}
