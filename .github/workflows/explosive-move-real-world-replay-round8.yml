@@ -1,0 +1,78 @@
+name: Explosive Move Full-Population Replay Round 8
+
+on:
+  push:
+    branches: [round-3]
+    paths:
+      - 'research/explosive_move_real_world_replay_round8.py'
+      - '.github/workflows/explosive-move-real-world-replay-round8.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: explosive-move-real-world-replay-round8-round-3
+  cancel-in-progress: true
+
+jobs:
+  research:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - name: Checkout round-3 branch
+        uses: actions/checkout@v4
+        with:
+          ref: round-3
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Restore Binance cache
+        uses: actions/cache@v4
+        with:
+          path: research/cache/binance
+          key: explosive-move-real-world-round8-${{ runner.os }}-${{ hashFiles('research/explosive_move_real_world_replay_round8.py') }}
+          restore-keys: |
+            explosive-move-candidate-evolution-round7-${{ runner.os }}-
+            explosive-move-alert-refinement-round4-${{ runner.os }}-
+            explosive-move-recall-round3-${{ runner.os }}-
+            explosive-move-${{ runner.os }}-
+            early-breakout-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pip install pandas numpy scikit-learn numba
+
+      - name: Run full-population replay
+        run: python research/explosive_move_real_world_replay_round8.py
+
+      - name: Show analysis
+        if: always()
+        run: |
+          cat research/results/explosive_move_real_world_replay_round8/ANALYSIS.md || true
+          echo
+          cat research/results/explosive_move_real_world_replay_round8/summary.csv || true
+
+      - name: Persist checkpoints and results
+        if: always()
+        run: |
+          if [ ! -d research/results/explosive_move_real_world_replay_round8 ]; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research/results/explosive_move_real_world_replay_round8
+          git diff --cached --quiet && exit 0
+          git commit -m "Store full-population replay Round 8 progress"
+          git fetch origin round-3
+          git rebase origin/round-3
+          git push origin HEAD:round-3
+
+      - name: Upload research artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: explosive-move-real-world-replay-round8
+          path: research/results/explosive_move_real_world_replay_round8
+          retention-days: 90
