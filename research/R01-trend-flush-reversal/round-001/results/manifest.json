@@ -1,0 +1,24 @@
+{
+  "study_id": "R01",
+  "round_id": "001",
+  "name": "Trend Flush Reversal",
+  "status": "RESEARCH ONLY - no live strategy changes",
+  "config_hash": "bc8beeedf811c46b",
+  "generated_at": "2026-10-05T16:21:11.713465+00:00",
+  "symbols": 40,
+  "event_entry_rows": 26257,
+  "period": [
+    "2023-01-01",
+    "2026-10-01"
+  ],
+  "costs": {
+    "fee_each_side": 0.001,
+    "slippage_each_side": 0.0005
+  },
+  "primary_target": 0.03,
+  "stops": [
+    0.01,
+    0.015,
+    0.02
+  ]
+}

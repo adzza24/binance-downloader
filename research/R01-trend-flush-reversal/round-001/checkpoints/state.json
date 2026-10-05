@@ -1,7 +1,7 @@
 {
   "study_id": "R01",
   "round_id": "001",
-  "status": "running",
+  "status": "complete",
   "config_hash": "bc8beeedf811c46b",
   "completed_symbols": [
     "AAVEUSDT",
@@ -46,5 +46,5 @@
     "ZECUSDT"
   ],
   "failed_symbols": [],
-  "updated_at": "2026-10-05T16:20:50.952200+00:00"
+  "updated_at": "2026-10-05T16:21:11.731436+00:00"
 }
