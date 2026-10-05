@@ -6,6 +6,7 @@
   "completed_symbols": [
     "AAVEUSDT",
     "ADAUSDT",
+    "ALGOUSDT",
     "APTUSDT",
     "ARBUSDT",
     "ATOMUSDT",
@@ -19,9 +20,12 @@
     "CVXUSDT",
     "DOGEUSDT",
     "DOTUSDT",
+    "ETCUSDT",
     "ETHUSDT",
     "FETUSDT",
+    "FILUSDT",
     "GALAUSDT",
+    "ICPUSDT",
     "INJUSDT",
     "LINKUSDT",
     "LTCUSDT",
@@ -36,10 +40,11 @@
     "SUNUSDT",
     "TRXUSDT",
     "UNIUSDT",
+    "VETUSDT",
     "WLDUSDT",
     "XRPUSDT",
     "ZECUSDT"
   ],
   "failed_symbols": [],
-  "updated_at": "2026-10-05T16:20:04.939211+00:00"
+  "updated_at": "2026-10-05T16:20:50.952200+00:00"
 }
