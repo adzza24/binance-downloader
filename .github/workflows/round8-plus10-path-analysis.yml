@@ -1,0 +1,47 @@
+name: Round 8 Plus10 Path Analysis
+
+on:
+  push:
+    branches: [round-3]
+    paths:
+      - 'research/round8_plus10_path_analysis.py'
+      - '.github/workflows/round8-plus10-path-analysis.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  analyse:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: round-3
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Restore Binance cache
+        uses: actions/cache@v4
+        with:
+          path: research/cache/binance
+          key: round8-plus10-${{ runner.os }}
+          restore-keys: |
+            explosive-move-real-world-round8-${{ runner.os }}-
+            explosive-move-candidate-evolution-round7-${{ runner.os }}-
+            explosive-move-${{ runner.os }}-
+      - run: pip install pandas numpy scikit-learn numba
+      - name: Analyse +10 paths
+        run: python research/round8_plus10_path_analysis.py
+      - name: Persist result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research/results/explosive_move_real_world_replay_round8/plus10_path_analysis.csv research/results/explosive_move_real_world_replay_round8/plus10_path_detail.csv.gz
+          git diff --cached --quiet && exit 0
+          git commit -m "Store Round 8 plus10 path analysis"
+          git fetch origin round-3
+          git rebase origin/round-3
+          git push origin HEAD:round-3
