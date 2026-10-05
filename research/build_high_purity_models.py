@@ -2,6 +2,7 @@ from __future__ import annotations
 
 # Rebuilds the frozen research-only A/B/C classifier artifacts.
 # IMPORTANT: preserve the original stage-3 shard/partition row order used during discovery.
+# Source artifacts are the retained outputs from staged run 37243430582.
 
 import json
 import pickle
@@ -38,9 +39,6 @@ EXPECTED = {
 
 
 def source_parts() -> tuple[list[Path], str]:
-    # Exact discovery analysis loaded shard folders lexicographically (0,1,2,3),
-    # then samples_part_*.parquet within each folder. Preserve that row order because
-    # HistGradientBoostingClassifier's internal validation split is row-order-sensitive.
     shard_parts = []
     for shard in range(4):
         d = ORIGINAL_SHARDS / f"drh2-canonical-{shard}"
@@ -55,9 +53,7 @@ def source_parts() -> tuple[list[Path], str]:
 
 
 def load_samples(a_features: list[str], bc_features: list[str]) -> tuple[pd.DataFrame, str]:
-    cols = list(dict.fromkeys(
-        ["sample_type", "split", "decision_time"] + a_features + bc_features
-    ))
+    cols = list(dict.fromkeys(["sample_type", "split", "decision_time"] + a_features + bc_features))
     parts, source = source_parts()
     frames = [pd.read_parquet(path, columns=cols) for path in parts]
     df = pd.concat(frames, ignore_index=True)
@@ -125,8 +121,8 @@ def fit_models(df: pd.DataFrame, spec: dict):
 
 def verify(base: pd.DataFrame, thresholds: dict) -> dict:
     a = base["score_a"].to_numpy() >= thresholds["A"]
-    b = (~a) & (base["score_b"].to_numpy() >= thresholds["B"]
-    c = (~a) & (~b) & (base["score_c"].to_numpy() >= thresholds["C"]
+    b = (~a) & (base["score_b"].to_numpy() >= thresholds["B"])
+    c = (~a) & (~b) & (base["score_c"].to_numpy() >= thresholds["C"])
     signal = a | b | c
     win = base["iswin"].to_numpy().astype(bool)
 
@@ -146,8 +142,7 @@ def verify(base: pd.DataFrame, thresholds: dict) -> dict:
         }
         if signals != expected["signals"] or winners != expected["winners"]:
             mismatches.append(
-                f"{split}: got {signals}/{winners}, expected "
-                f"{expected['signals']}/{expected['winners']}"
+                f"{split}: got {signals}/{winners}, expected {expected['signals']}/{expected['winners']}"
             )
     print(json.dumps(summary, indent=2))
     if mismatches:
