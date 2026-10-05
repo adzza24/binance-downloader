@@ -1,9 +1,9 @@
 {
   "status": "OK",
   "research_only": true,
-  "generated_at": "2026-10-05T12:27:02.511859+00:00",
-  "trigger_value": "test-verified-models-20261005-01",
-  "decision_time": "2026-10-05T11:00:00+00:00",
+  "generated_at": "2026-10-05T14:41:12.674250+00:00",
+  "trigger_value": "high-purity-2026-10-05T14:40:18Z",
+  "decision_time": "2026-10-05T13:00:00+00:00",
   "model_set": "high-purity-abc-v1",
   "model_verification": {
     "DISCOVERY_2021-11_2024-04": {
@@ -39,39 +39,39 @@
   "research_universe_symbols": 87,
   "currently_trading_research_symbols": 87,
   "symbols_with_market_data": 87,
-  "mechanically_evaluated": 77,
+  "mechanically_evaluated": 76,
   "failure_count": 0,
   "failures": {},
   "signals": [
     {
-      "symbol": "SANDUSDT",
+      "symbol": "ENJUSDT",
       "family": "A",
-      "score": 0.9179673298378738,
+      "score": 0.9126295619504435,
       "family_scores": {
-        "A": 0.9179673298378738
+        "A": 0.9126295619504435
       },
-      "decision_time": "2026-10-05T11:00:00+00:00",
-      "intended_entry_time": "2026-10-05T12:00:00+00:00",
-      "decision_close": 0.07194,
-      "quote_volume_24h": 21613177.571489997,
+      "decision_time": "2026-10-05T13:00:00+00:00",
+      "intended_entry_time": "2026-10-05T14:00:00+00:00",
+      "decision_close": 0.03313,
+      "quote_volume_24h": 1690113.3461270002,
       "feature_context": {
-        "close_vs_ema6": -0.010880819485429516,
-        "close_vs_ema12": -0.017407410011032076,
-        "ret_12h": -0.05565765292727742,
-        "rs_12h": -0.05202885366690535,
-        "atr24_pct": 0.027725651005467526,
-        "atr72_pct": 0.04458576591604114,
-        "atr168_pct": 0.027889478004156896,
-        "atr24_pct__chg_1h": -0.0012690761838951604,
-        "atr168_pct__chg_1h": 0.00036688024428266006,
-        "dist_24h_high": -0.10976364311347608,
-        "dist_168h_high": -0.14316341114816578,
-        "range_3h": 0.02865930378862025,
-        "range_168h": 1.0129465356029734,
-        "btc_ret_24h": 0.010626488551211066,
-        "btc_atr24_pct": 0.0043058616343447376,
-        "breadth_positive_24h": 0.7126436781609196,
-        "median_ret_6h": 0.005588172879677389
+        "close_vs_ema6": -0.011388478033580118,
+        "close_vs_ema12": -0.013515684447243381,
+        "ret_12h": -0.026161081716637336,
+        "rs_12h": -0.02404482767332783,
+        "atr24_pct": 0.015381326089143775,
+        "atr72_pct": 0.027454975349632763,
+        "atr168_pct": 0.022163770428183346,
+        "atr24_pct__chg_1h": -0.0005694870406576739,
+        "atr168_pct__chg_1h": 0.00023563371405441527,
+        "dist_24h_high": -0.03354725787631263,
+        "dist_168h_high": -0.18779112527580288,
+        "range_3h": 0.03342449103615919,
+        "range_168h": 0.4357620556142203,
+        "btc_ret_24h": 0.01397060151940721,
+        "btc_atr24_pct": 0.004564777756142261,
+        "breadth_positive_24h": 0.632183908045977,
+        "median_ret_6h": -0.007792207792207795
       }
     }
   ]
