@@ -27,12 +27,12 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.13'
 
-      - name: Install dependencies
+      - name: Install exact discovery environment
         run: |
           python -m pip install --upgrade pip
-          pip install pandas==2.2.3 numpy==2.3.5 scikit-learn==1.8.0 pyarrow
+          pip install pandas==2.2.3 numpy==2.3.5 scipy==1.17.0 joblib==1.5.3 threadpoolctl==3.6.0 scikit-learn==1.8.0 pyarrow
 
       - name: Rebuild and verify frozen models
         run: python research/build_high_purity_models.py
