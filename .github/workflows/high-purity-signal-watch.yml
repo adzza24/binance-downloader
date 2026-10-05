@@ -1,0 +1,68 @@
+name: High-Purity Signal Watch
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - 'research/results/daily_return_harvest/high_purity_runtime/watch_trigger.txt'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: high-purity-signal-watch
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            research/high_purity_signal_watch.py
+            research/high_purity_signal_features.json
+            research/results/daily_return_harvest/round2_event_discovery/dataset_v1/universe.parquet
+            research/results/daily_return_harvest/high_purity_runtime/models
+            research/results/daily_return_harvest/high_purity_runtime/watch_trigger.txt
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install runtime dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas==2.2.3 numpy==2.3.5 scikit-learn==1.8.0 pyarrow requests
+
+      - name: Evaluate latest completed 1h candle
+        run: python research/high_purity_signal_watch.py
+
+      - name: Persist latest research result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f research/results/daily_return_harvest/high_purity_runtime/latest_signal_watch.json
+          if git diff --cached --quiet; then
+            echo "No result change to commit."
+            exit 0
+          fi
+          git commit -m "Update high-purity research signal watch result"
+          for attempt in 1 2 3; do
+            if git push; then
+              exit 0
+            fi
+            echo "Push attempt $attempt failed; rebasing and retrying"
+            git pull --rebase origin master
+          done
+          exit 1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: high-purity-signal-watch-result
+          path: research/results/daily_return_harvest/high_purity_runtime/latest_signal_watch.json
+          retention-days: 14
