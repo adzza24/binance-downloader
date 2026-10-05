@@ -1,0 +1,66 @@
+name: Full-Stream W3 Direct Classifier
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - 'research/full_stream_w3_direct_classifier.py'
+      - '.github/workflows/full-stream-w3-direct-classifier.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            research/full_stream_w3_direct_classifier.py
+            research/replay_high_purity_2026.py
+            research/high_purity_signal_watch.py
+            research/results/daily_return_harvest/full_stream_w3_discovery/feature_importance.csv
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install research environment
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas==3.0.6 numpy==2.4.6 scipy==1.17.0 scikit-learn==1.8.0 lightgbm==4.6.0 pyarrow==25.0.1 tabulate requests
+      - name: Download existing full Round 2 shards
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p research/cache/full_stream_w3_direct_source
+          gh run download 37228155785 -n drh2-shard-0 -D research/cache/full_stream_w3_direct_source/drh2-shard-0
+          gh run download 37228155785 -n drh2-shard-1 -D research/cache/full_stream_w3_direct_source/drh2-shard-1
+          gh run download 37228155785 -n drh2-shard-2 -D research/cache/full_stream_w3_direct_source/drh2-shard-2
+          gh run download 37228155785 -n drh2-shard-3 -D research/cache/full_stream_w3_direct_source/drh2-shard-3
+      - name: Train against every eligible training hour and evaluate full stream
+        run: python research/full_stream_w3_direct_classifier.py
+      - name: Show analysis
+        run: cat research/results/daily_return_harvest/full_stream_w3_direct/ANALYSIS.md
+      - name: Commit compact research outputs
+        run: |
+          OUT=research/results/daily_return_harvest/full_stream_w3_direct
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --sparse -f "$OUT/ANALYSIS.md" "$OUT/selected_features.csv" "$OUT/training_population.csv" "$OUT/training_by_symbol.csv" "$OUT/full_stream_results.csv" "$OUT/threshold_frontiers.csv" "$OUT/feature_importance.csv" "$OUT/selected_signal_onsets.csv.gz" "$OUT/selection.json"
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Add all-hours W3 classifier results"
+          for attempt in 1 2 3; do
+            if git push; then exit 0; fi
+            git pull --rebase origin master
+          done
+          exit 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: full-stream-w3-direct-classifier
+          path: research/results/daily_return_harvest/full_stream_w3_direct/
+          retention-days: 30
