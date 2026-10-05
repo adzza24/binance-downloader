@@ -1,0 +1,17 @@
+{
+  "study": "Explosive Move Intersection Veto Round 5",
+  "branch": "round-3",
+  "status": "RESEARCH ONLY - no live strategy or automation edits",
+  "input_alerts": 69407,
+  "source_events": 8683,
+  "targets": [
+    0.9,
+    0.92,
+    0.95
+  ],
+  "max_rules": 4,
+  "beam_width": 80,
+  "candidate_generation": "Discovery 2019-2022 positive-boundary and noise-quantile one-sided conditions, global and sufficiently populated family scopes.",
+  "selection": "Beam search selected on 2023-2024 validation subject to same event-recall floor in discovery; minimise validation unmatched-alert retention, then rule count.",
+  "confirmation": "2025-2026 frozen reporting only; never used in selection."
+}
