@@ -5,6 +5,8 @@
   "config_hash": "bc8beeedf811c46b",
   "completed_symbols": [
     "ADAUSDT",
+    "APTUSDT",
+    "ARBUSDT",
     "ATOMUSDT",
     "AVAXUSDT",
     "BCHUSDT",
@@ -13,13 +15,16 @@
     "DOGEUSDT",
     "DOTUSDT",
     "ETHUSDT",
+    "INJUSDT",
     "LINKUSDT",
     "LTCUSDT",
     "NEARUSDT",
+    "OPUSDT",
     "SOLUSDT",
+    "SUIUSDT",
     "TRXUSDT",
     "XRPUSDT"
   ],
   "failed_symbols": [],
-  "updated_at": "2026-10-05T16:17:02.196905+00:00"
+  "updated_at": "2026-10-05T16:17:25.554581+00:00"
 }
