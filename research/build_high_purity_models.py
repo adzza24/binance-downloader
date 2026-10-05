@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# Rebuilds the frozen research-only A/B/C classifier artifacts from the canonical Round 2 sample dataset.
+
 import json
 import pickle
 from pathlib import Path
