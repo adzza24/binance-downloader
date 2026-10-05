@@ -1,0 +1,25 @@
+{
+  "study": "Explosive Move Alert Refinement Round 4",
+  "branch": "round-3",
+  "status": "RESEARCH ONLY - no live strategy or automation edits",
+  "source_alerts": "research/results/explosive_move_recall_round3/causal_alerts.csv.gz",
+  "source_events": "research/results/explosive_move_recall_round3/event_coverage.csv.gz",
+  "alert_count": 69407,
+  "event_count": 8683,
+  "feature_count": 82,
+  "targets": [
+    0.95,
+    0.9,
+    0.85,
+    0.8,
+    0.7
+  ],
+  "max_rules": 5,
+  "selection": "Candidate threshold directions and values from 2019-2022 discovery; greedy conjunction selected on 2023-2024 validation while preserving explicit event-recall floors; 2025-2026 confirmation reporting only.",
+  "checkpointing": "Per-symbol reconstructed feature snapshots are checkpointed and reusable after failure.",
+  "caveats": [
+    "2025-2026 is previously exposed confirmation data, not a pristine holdout",
+    "Round 1 current-universe survivorship bias remains",
+    "alert observations are clustered within events and market episodes; event recall is the primary metric"
+  ]
+}
