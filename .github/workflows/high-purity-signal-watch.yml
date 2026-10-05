@@ -27,17 +27,18 @@ jobs:
             research/results/daily_return_harvest/round2_event_discovery/dataset_v1/universe.parquet
             research/results/daily_return_harvest/high_purity_runtime/models
             research/results/daily_return_harvest/high_purity_runtime/watch_trigger.txt
+            research/results/daily_return_harvest/high_purity_runtime/latest_signal_watch.json
           sparse-checkout-cone-mode: false
           fetch-depth: 1
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.13'
 
-      - name: Install runtime dependencies
+      - name: Install exact runtime environment
         run: |
           python -m pip install --upgrade pip
-          pip install pandas==2.2.3 numpy==2.3.5 scikit-learn==1.8.0 pyarrow requests
+          pip install pandas==2.2.3 numpy==2.3.5 scipy==1.17.0 joblib==1.5.3 threadpoolctl==3.6.0 scikit-learn==1.8.0 pyarrow requests
 
       - name: Evaluate latest completed 1h candle
         run: python research/high_purity_signal_watch.py
@@ -46,7 +47,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f research/results/daily_return_harvest/high_purity_runtime/latest_signal_watch.json
+          git add --sparse -f research/results/daily_return_harvest/high_purity_runtime/latest_signal_watch.json
           if git diff --cached --quiet; then
             echo "No result change to commit."
             exit 0
