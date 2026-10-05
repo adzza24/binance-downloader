@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 # Rebuilds the frozen research-only A/B/C classifier artifacts from the canonical Round 2 sample dataset.
+# Environment must match the discovery run; the workflow pins the exact numerical stack.
 
 import json
 import pickle
@@ -136,6 +137,7 @@ def verify(base: pd.DataFrame, thresholds: dict) -> dict:
     win = base["iswin"].to_numpy().astype(bool)
 
     summary = {}
+    mismatches = []
     for split, expected in EXPECTED.items():
         m = base["split"].to_numpy() == split
         signals = int((m & signal).sum())
@@ -149,11 +151,13 @@ def verify(base: pd.DataFrame, thresholds: dict) -> dict:
             "family_c": int((m & c).sum()),
         }
         if signals != expected["signals"] or winners != expected["winners"]:
-            raise RuntimeError(
-                f"Model integrity check failed for {split}: "
-                f"got {signals}/{winners}, expected "
+            mismatches.append(
+                f"{split}: got {signals}/{winners}, expected "
                 f"{expected['signals']}/{expected['winners']}"
             )
+    print(json.dumps(summary, indent=2))
+    if mismatches:
+        raise RuntimeError("Model integrity check failed: " + "; ".join(mismatches))
     return summary
 
 
