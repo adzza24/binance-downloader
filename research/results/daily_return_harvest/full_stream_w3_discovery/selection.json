@@ -1,0 +1,14 @@
+{
+  "ANCHOR": {
+    "threshold": 0.6410041791699217,
+    "reason": "best precision with >=0.5/day"
+  },
+  "EARLY3": {
+    "threshold": 0.6559379188104113,
+    "reason": "best precision with >=0.5/day"
+  },
+  "W3": {
+    "threshold": 0.4706804931616497,
+    "reason": "best precision with >=0.5/day"
+  }
+}
