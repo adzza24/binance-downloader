@@ -1,0 +1,76 @@
+name: Explosive Move Candidate Evolution Round 7
+
+on:
+  push:
+    branches: [round-3]
+    paths:
+      - 'research/explosive_move_candidate_evolution_round7.py'
+      - '.github/workflows/explosive-move-candidate-evolution-round7.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: explosive-move-candidate-evolution-round7-round-3
+  cancel-in-progress: true
+
+jobs:
+  research:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout round-3 branch
+        uses: actions/checkout@v4
+        with:
+          ref: round-3
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Restore Binance cache
+        uses: actions/cache@v4
+        with:
+          path: research/cache/binance
+          key: explosive-move-candidate-evolution-round7-${{ runner.os }}-${{ hashFiles('research/explosive_move_candidate_evolution_round7.py', 'research/explosive_move_discovery_round1.py') }}
+          restore-keys: |
+            explosive-move-alert-refinement-round4-${{ runner.os }}-
+            explosive-move-recall-round3-${{ runner.os }}-
+            explosive-move-entry-round3-${{ runner.os }}-
+            explosive-move-${{ runner.os }}-
+            early-breakout-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pip install pandas numpy requests numba scikit-learn
+
+      - name: Run candidate evolution research
+        run: python research/explosive_move_candidate_evolution_round7.py
+
+      - name: Show analysis
+        if: always()
+        run: |
+          cat research/results/explosive_move_candidate_evolution_round7/ANALYSIS.md || true
+
+      - name: Persist checkpoints and results
+        if: always()
+        run: |
+          if [ ! -d research/results/explosive_move_candidate_evolution_round7 ]; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research/results/explosive_move_candidate_evolution_round7
+          git diff --cached --quiet && exit 0
+          git commit -m "Store candidate evolution Round 7 progress"
+          git fetch origin round-3
+          git rebase origin/round-3
+          git push origin HEAD:round-3
+
+      - name: Upload research artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: explosive-move-candidate-evolution-round7
+          path: research/results/explosive_move_candidate_evolution_round7
+          retention-days: 90
