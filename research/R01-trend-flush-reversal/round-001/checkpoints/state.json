@@ -1,9 +1,15 @@
 {
   "study_id": "R01",
   "round_id": "001",
-  "status": "not_started",
-  "config_hash": null,
-  "completed_symbols": [],
+  "status": "running",
+  "config_hash": "bc8beeedf811c46b",
+  "completed_symbols": [
+    "BNBUSDT",
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT",
+    "XRPUSDT"
+  ],
   "failed_symbols": [],
-  "updated_at": null
+  "updated_at": "2026-10-05T16:16:17.104185+00:00"
 }
