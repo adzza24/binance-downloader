@@ -14,21 +14,26 @@
     "BCHUSDT",
     "BNBUSDT",
     "BTCUSDT",
+    "COTIUSDT",
     "CRVUSDT",
     "CVXUSDT",
     "DOGEUSDT",
     "DOTUSDT",
     "ETHUSDT",
     "FETUSDT",
+    "GALAUSDT",
     "INJUSDT",
     "LINKUSDT",
     "LTCUSDT",
+    "MANAUSDT",
     "NEARUSDT",
     "OPUSDT",
     "PEOPLEUSDT",
     "RUNEUSDT",
+    "SANDUSDT",
     "SOLUSDT",
     "SUIUSDT",
+    "SUNUSDT",
     "TRXUSDT",
     "UNIUSDT",
     "WLDUSDT",
@@ -36,5 +41,5 @@
     "ZECUSDT"
   ],
   "failed_symbols": [],
-  "updated_at": "2026-10-05T16:19:00.257849+00:00"
+  "updated_at": "2026-10-05T16:20:04.939211+00:00"
 }
