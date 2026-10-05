@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   build:
@@ -21,7 +22,6 @@ jobs:
           sparse-checkout: |
             research/build_high_purity_models.py
             research/high_purity_signal_features.json
-            research/results/daily_return_harvest/round2_event_discovery/dataset_v1/samples
           sparse-checkout-cone-mode: false
           fetch-depth: 1
 
@@ -34,6 +34,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install pandas==2.2.3 numpy==2.3.5 scipy==1.17.0 joblib==1.5.3 threadpoolctl==3.6.0 scikit-learn==1.8.0 pyarrow
 
+      - name: Download original canonical shard artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p research/cache/high_purity_model_source
+          gh run download 37243430582 -n drh2-stage3-canonical-0 -D research/cache/high_purity_model_source/drh2-canonical-0
+          gh run download 37243430582 -n drh2-stage3-canonical-1 -D research/cache/high_purity_model_source/drh2-canonical-1
+          gh run download 37243430582 -n drh2-stage3-canonical-2 -D research/cache/high_purity_model_source/drh2-canonical-2
+          gh run download 37243430582 -n drh2-stage3-canonical-3 -D research/cache/high_purity_model_source/drh2-canonical-3
+          find research/cache/high_purity_model_source -name 'samples_part_*.parquet' -print | sort
+
       - name: Rebuild and verify frozen models
         run: python research/build_high_purity_models.py
 
@@ -41,16 +52,16 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f research/results/daily_return_harvest/high_purity_runtime/models/event_hgb_model.pkl
-          git add -f research/results/daily_return_harvest/high_purity_runtime/models/familyB_model.pkl
-          git add -f research/results/daily_return_harvest/high_purity_runtime/models/familyC15_model.pkl
-          git add -f research/results/daily_return_harvest/high_purity_runtime/models/model_manifest.json
-          if git diff --cached --quiet; then
-            echo "No model changes to commit."
-          else
-            git commit -m "Persist verified high-purity signal models"
-            git push
-          fi
+          git add --sparse -f research/results/daily_return_harvest/high_purity_runtime/models/event_hgb_model.pkl
+          git add --sparse -f research/results/daily_return_harvest/high_purity_runtime/models/familyB_model.pkl
+          git add --sparse -f research/results/daily_return_harvest/high_purity_runtime/models/familyC15_model.pkl
+          git add --sparse -f research/results/daily_return_harvest/high_purity_runtime/models/model_manifest.json
+          git commit -m "Persist verified high-purity signal models"
+          for attempt in 1 2 3; do
+            if git push; then exit 0; fi
+            git pull --rebase origin master
+          done
+          exit 1
 
       - uses: actions/upload-artifact@v4
         with:
