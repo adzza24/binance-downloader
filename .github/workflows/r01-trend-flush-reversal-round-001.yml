@@ -1,0 +1,71 @@
+name: R01 Trend Flush Reversal Round 001
+
+on:
+  push:
+    branches:
+      - research/r01-trend-flush-reversal
+    paths:
+      - 'research/R01-trend-flush-reversal/round-001/run.py'
+      - 'research/R01-trend-flush-reversal/round-001/config.json'
+      - '.github/workflows/r01-trend-flush-reversal-round-001.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: r01-trend-flush-reversal-round-001
+  cancel-in-progress: false
+
+jobs:
+  research:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - name: Checkout research branch
+        uses: actions/checkout@v4
+        with:
+          ref: research/r01-trend-flush-reversal
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Restore Binance cache
+        uses: actions/cache@v4
+        with:
+          path: research/cache/binance
+          key: r01-trend-flush-${{ runner.os }}-${{ hashFiles('research/R01-trend-flush-reversal/round-001/config.json') }}
+          restore-keys: |
+            daily-return-harvest-round2-${{ runner.os }}-
+            daily-return-harvest-round1-${{ runner.os }}-
+            explosive-move-entry-round3-${{ runner.os }}-
+            explosive-move-entry-round2-${{ runner.os }}-
+            explosive-move-${{ runner.os }}-
+            early-breakout-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pip install pandas numpy tabulate
+
+      - name: Syntax check
+        run: python -m py_compile research/R01-trend-flush-reversal/round-001/run.py
+
+      - name: Run R01 Round 001
+        run: python research/R01-trend-flush-reversal/round-001/run.py
+
+      - name: Show analysis
+        if: always()
+        run: |
+          cat research/R01-trend-flush-reversal/round-001/results/ANALYSIS.md || true
+          echo
+          cat research/R01-trend-flush-reversal/round-001/checkpoints/state.json || true
+
+      - name: Upload round artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r01-trend-flush-reversal-round-001
+          path: research/R01-trend-flush-reversal/round-001
+          retention-days: 90
