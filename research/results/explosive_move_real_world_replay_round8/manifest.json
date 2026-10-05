@@ -1,0 +1,13 @@
+{
+  "study": "Explosive Move Full-Population Replay Round 8",
+  "branch": "round-3",
+  "replay_start": "2024-01-01T00:00:00+00:00",
+  "replay_end": "2026-10-05T15:00:00+00:00",
+  "universe": "current eligible Binance USDT spot pairs ranked 1-200 by current 24h quote volume",
+  "tiers": [
+    "ORIGINAL_TOP100",
+    "EXTERNAL_101_200"
+  ],
+  "signal": "Round3 detector -> Round5 target_recall=0.90 rules -> 96h candidate -> Round7 union caps 3h=1,6h=0,12h=2,24h=1,48h=1",
+  "evaluation": "direct forward candle paths; no event catalogue labels used"
+}
