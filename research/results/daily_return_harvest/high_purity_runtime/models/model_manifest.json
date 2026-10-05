@@ -1,0 +1,41 @@
+{
+  "model_set": "high-purity-abc-v1",
+  "dataset_version": "drh2-event-v1-20261004",
+  "schema_hash": "8a9a01e2478311b051a1",
+  "training_source": "stage3-canonical-shards-0-3",
+  "model_matrix_dtype": "float32",
+  "sklearn_version": "1.8.0",
+  "training_cutoff_utc": "2023-11-01 00:00:00+00:00",
+  "thresholds": {
+    "A": 0.899123,
+    "B": 0.87765,
+    "C": 0.839106
+  },
+  "verification": {
+    "DISCOVERY_2021-11_2024-04": {
+      "signals": 975,
+      "winners": 938,
+      "precision": 0.9620512820512821,
+      "family_a": 494,
+      "family_b": 231,
+      "family_c": 250
+    },
+    "VALIDATION_2024-05_2025-12": {
+      "signals": 645,
+      "winners": 587,
+      "precision": 0.9100775193798449,
+      "family_a": 325,
+      "family_b": 144,
+      "family_c": 176
+    },
+    "CONFIRMATION_2026": {
+      "signals": 254,
+      "winners": 231,
+      "precision": 0.9094488188976378,
+      "family_a": 137,
+      "family_b": 64,
+      "family_c": 53
+    }
+  },
+  "note": "Research-only frozen model artifacts. Runtime must not retrain."
+}
