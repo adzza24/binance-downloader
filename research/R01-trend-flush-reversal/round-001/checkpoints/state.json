@@ -9,11 +9,13 @@
     "APTUSDT",
     "ARBUSDT",
     "ATOMUSDT",
+    "AUCTIONUSDT",
     "AVAXUSDT",
     "BCHUSDT",
     "BNBUSDT",
     "BTCUSDT",
     "CRVUSDT",
+    "CVXUSDT",
     "DOGEUSDT",
     "DOTUSDT",
     "ETHUSDT",
@@ -23,13 +25,16 @@
     "LTCUSDT",
     "NEARUSDT",
     "OPUSDT",
+    "PEOPLEUSDT",
     "RUNEUSDT",
     "SOLUSDT",
     "SUIUSDT",
     "TRXUSDT",
     "UNIUSDT",
-    "XRPUSDT"
+    "WLDUSDT",
+    "XRPUSDT",
+    "ZECUSDT"
   ],
   "failed_symbols": [],
-  "updated_at": "2026-10-05T16:17:45.764953+00:00"
+  "updated_at": "2026-10-05T16:19:00.257849+00:00"
 }
