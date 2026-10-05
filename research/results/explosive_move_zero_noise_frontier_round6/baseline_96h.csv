@@ -1,0 +1,4 @@
+split,selected_candidates,wanted_candidate_episodes,noise_candidate_episodes,unique_wanted_events,weeks_covered
+DISCOVERY_2019_2022,3480,1797,1683,3368,193
+VALIDATION_2023_2024,3591,1632,1959,2326,105
+CONFIRMATION_2025_2026,4035,1625,2410,2158,86

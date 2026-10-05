@@ -1,0 +1,10 @@
+{
+  "study": "Explosive Move Zero-Noise Frontier Round 6",
+  "branch": "round-3",
+  "status": "RESEARCH ONLY - no live strategy or automation edits",
+  "dedupe_hours": 96,
+  "source_selected_alerts": "research/results/explosive_move_intersection_veto_round5/selected_alerts_90.csv.gz",
+  "max_intersection_depth": 8,
+  "confirmation_never_used_for_selection": true,
+  "first_alert_features_only": true
+}
