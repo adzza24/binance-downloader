@@ -1,0 +1,60 @@
+{
+  "research_only": true,
+  "training_source": "stage3-canonical-shards-0-3",
+  "development_period": "DISCOVERY tail from 2023-11-01 through 2024-04-30",
+  "untouched_evaluation_periods": [
+    "VALIDATION_2024-05_2025-12",
+    "CONFIRMATION_2026"
+  ],
+  "candidate_deltas_tested": [
+    0.0,
+    0.02,
+    0.04,
+    0.06,
+    0.08,
+    0.1
+  ],
+  "selection_rule": ">=90% precision in both untouched periods, then maximise worst-period winners/day",
+  "best": {
+    "delta": 0.0,
+    "mode": "learned_selector_top1",
+    "dev_signals": 188,
+    "dev_winners": 182,
+    "dev_precision": 0.9680851063829787,
+    "dev_signals_per_day": 1.0386740331491713,
+    "dev_winners_per_day": 1.0055248618784531,
+    "dev_w5_2_rate": 0.6063829787234043,
+    "dev_w7_3_rate": 0.4787234042553192,
+    "dev_false_types": {
+      "SAME_TIME_CONTROL": 6
+    },
+    "val_signals": 533,
+    "val_winners": 496,
+    "val_precision": 0.9305816135084428,
+    "val_signals_per_day": 0.8752052545155994,
+    "val_winners_per_day": 0.8144499178981938,
+    "val_w5_2_rate": 0.574108818011257,
+    "val_w7_3_rate": 0.4878048780487805,
+    "val_false_types": {
+      "SAME_TIME_CONTROL": 37
+    },
+    "conf_signals": 229,
+    "conf_winners": 212,
+    "conf_precision": 0.925764192139738,
+    "conf_signals_per_day": 0.9423868312757202,
+    "conf_winners_per_day": 0.8724279835390947,
+    "conf_w5_2_rate": 0.5502183406113537,
+    "conf_w7_3_rate": 0.43231441048034935,
+    "conf_false_types": {
+      "SAME_TIME_CONTROL": 14,
+      "SAME_COIN_RANDOM": 2,
+      "HARD_NEGATIVE": 1
+    },
+    "selector_threshold": 0.06745403270941241,
+    "n_selector_features": 28.0,
+    "selector_features": "xrank_ret_6h | xrank_rs_6h | median_ret_24h | RANK__median_ret_6h__chg_168h | range_6h__chg_168h | trade_ratio_current | range_12h__chg_168h | RANK__range24_vs_72h__chg_24h | RANK__ret_1h__chg_72h | RANK__ret_1h__chg_3h | RANK__close_vs_ema6__chg_72h | RANK__dist_72h_high__chg_72h | RANK__dist_72h_high__chg_12h | RANK__rs_1h__chg_3h | RANK__taker_buy_current__chg_72h | RANK__rs_3h__chg_72h | RANK__close_vs_vwap72__chg_12h | RANK__close_vs_vwap24__chg_72h | RANK__ema24_slope_6h__chg_12h | RANK__close_vs_ema12__chg_72h | RANK__lower_wick_share__chg_3h | RANK__close_location__chg_3h | RANK__green_body_pct__chg_72h | RANK__green_body_pct__chg_3h | RANK__taker_buy_24h__chg_72h | volume_ratio_current | trade_ratio_current__chg_72h | volume_ratio_3h__chg_1h",
+    "min_oos_precision": 0.925764192139738,
+    "min_oos_winners_per_day": 0.8144499178981938,
+    "min_oos_signals_per_day": 0.8752052545155994
+  }
+}
