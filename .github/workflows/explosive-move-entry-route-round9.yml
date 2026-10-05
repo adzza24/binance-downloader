@@ -1,0 +1,67 @@
+name: Explosive Move Entry Route Round 9
+
+on:
+  push:
+    branches: [round-3]
+    paths:
+      - 'research/explosive_move_entry_route_round9.py'
+      - '.github/workflows/explosive-move-entry-route-round9.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: explosive-move-entry-route-round9-round-3
+  cancel-in-progress: true
+
+jobs:
+  research:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: round-3
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Restore Binance cache
+        uses: actions/cache@v4
+        with:
+          path: research/cache/binance
+          key: explosive-move-entry-route-round9-${{ runner.os }}-${{ hashFiles('research/explosive_move_entry_route_round9.py') }}
+          restore-keys: |
+            explosive-move-real-world-round8-${{ runner.os }}-
+            explosive-move-candidate-evolution-round7-${{ runner.os }}-
+            explosive-move-${{ runner.os }}-
+      - name: Install dependencies
+        run: pip install pandas numpy scikit-learn numba
+      - name: Run Round 9
+        run: python research/explosive_move_entry_route_round9.py
+      - name: Show analysis
+        if: always()
+        run: |
+          cat research/results/explosive_move_entry_route_round9/ANALYSIS.md || true
+          echo
+          cat research/results/explosive_move_entry_route_round9/strategy_summary.csv || true
+      - name: Persist results
+        if: always()
+        run: |
+          if [ ! -d research/results/explosive_move_entry_route_round9 ]; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research/results/explosive_move_entry_route_round9
+          git diff --cached --quiet && exit 0
+          git commit -m "Store Round 9 entry-route results"
+          git fetch origin round-3
+          git rebase origin/round-3
+          git push origin HEAD:round-3
+      - name: Upload artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: explosive-move-entry-route-round9
+          path: research/results/explosive_move_entry_route_round9
+          retention-days: 90
