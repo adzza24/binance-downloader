@@ -1,0 +1,63 @@
+name: Explosive Move Zero-Noise Frontier Round 6
+
+on:
+  push:
+    branches: [round-3]
+    paths:
+      - 'research/explosive_move_zero_noise_frontier_round6.py'
+      - '.github/workflows/explosive-move-zero-noise-frontier-round6.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout round-3 branch
+        uses: actions/checkout@v4
+        with:
+          ref: round-3
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pandas numpy
+
+      - name: Run zero-noise frontier research
+        run: python research/explosive_move_zero_noise_frontier_round6.py
+
+      - name: Show analysis
+        if: always()
+        run: |
+          if [ -f research/results/explosive_move_zero_noise_frontier_round6/ANALYSIS.md ]; then
+            cat research/results/explosive_move_zero_noise_frontier_round6/ANALYSIS.md
+          fi
+
+      - name: Persist Round 6 results
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research/results/explosive_move_zero_noise_frontier_round6
+          if git diff --cached --quiet; then
+            echo "No result changes to commit"
+          else
+            git commit -m "Persist zero-noise frontier Round 6 results"
+            git pull --rebase origin round-3
+            git push origin HEAD:round-3
+          fi
+
+      - name: Upload research artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: explosive-move-zero-noise-frontier-round6
+          path: research/results/explosive_move_zero_noise_frontier_round6
+          if-no-files-found: warn
