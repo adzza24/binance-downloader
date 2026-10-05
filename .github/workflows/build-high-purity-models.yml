@@ -1,0 +1,59 @@
+name: Build High-Purity Signal Models
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - 'research/build_high_purity_models.py'
+      - 'research/high_purity_signal_features.json'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            research/build_high_purity_models.py
+            research/high_purity_signal_features.json
+            research/results/daily_return_harvest/round2_event_discovery/dataset_v1/samples
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas==2.2.3 numpy==2.3.5 scikit-learn==1.8.0 pyarrow
+
+      - name: Rebuild and verify frozen models
+        run: python research/build_high_purity_models.py
+
+      - name: Commit verified model artifacts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f research/results/daily_return_harvest/high_purity_runtime/models/event_hgb_model.pkl
+          git add -f research/results/daily_return_harvest/high_purity_runtime/models/familyB_model.pkl
+          git add -f research/results/daily_return_harvest/high_purity_runtime/models/familyC15_model.pkl
+          git add -f research/results/daily_return_harvest/high_purity_runtime/models/model_manifest.json
+          if git diff --cached --quiet; then
+            echo "No model changes to commit."
+          else
+            git commit -m "Persist verified high-purity signal models"
+            git push
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: high-purity-models
+          path: research/results/daily_return_harvest/high_purity_runtime/models/
+          retention-days: 30
