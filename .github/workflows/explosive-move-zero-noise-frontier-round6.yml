@@ -5,6 +5,7 @@ on:
     branches: [round-3]
     paths:
       - 'research/explosive_move_zero_noise_frontier_round6.py'
+      - 'research/explosive_move_zero_noise_frontier_round6_retry.py'
       - '.github/workflows/explosive-move-zero-noise-frontier-round6.yml'
   workflow_dispatch:
 
@@ -31,7 +32,7 @@ jobs:
         run: pip install pandas numpy
 
       - name: Run zero-noise frontier research
-        run: python research/explosive_move_zero_noise_frontier_round6.py
+        run: python research/explosive_move_zero_noise_frontier_round6_retry.py
 
       - name: Show analysis
         if: always()
