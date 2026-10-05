@@ -4,12 +4,17 @@
   "status": "running",
   "config_hash": "bc8beeedf811c46b",
   "completed_symbols": [
+    "ADAUSDT",
+    "AVAXUSDT",
     "BNBUSDT",
     "BTCUSDT",
+    "DOGEUSDT",
+    "DOTUSDT",
     "ETHUSDT",
+    "LINKUSDT",
     "SOLUSDT",
     "XRPUSDT"
   ],
   "failed_symbols": [],
-  "updated_at": "2026-10-05T16:16:17.104185+00:00"
+  "updated_at": "2026-10-05T16:16:41.457472+00:00"
 }
