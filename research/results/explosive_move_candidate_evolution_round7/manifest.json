@@ -1,0 +1,16 @@
+{
+  "study": "Explosive Move Candidate Evolution Round 7",
+  "branch": "round-3",
+  "status": "RESEARCH ONLY - no live strategy or automation edits",
+  "dedupe_hours": 96,
+  "checkpoints_hours": [
+    3,
+    6,
+    12,
+    24,
+    48
+  ],
+  "actionable_max_mfe": 0.05,
+  "selection": "thresholds discovery only; frontier selection 2019-2024; 2025-2026 frozen confirmation",
+  "candidate_source": "research/results/explosive_move_intersection_veto_round5/selected_alerts_90.csv.gz"
+}
