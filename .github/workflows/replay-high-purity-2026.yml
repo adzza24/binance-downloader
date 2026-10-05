@@ -1,0 +1,75 @@
+name: Replay High-Purity Portfolio 2026
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - 'research/replay_high_purity_2026.py'
+      - '.github/workflows/replay-high-purity-2026.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  replay:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            research/replay_high_purity_2026.py
+            research/high_purity_signal_watch.py
+            research/results/daily_return_harvest/high_purity_runtime/models
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install research environment
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas==2.2.3 numpy==2.3.5 scipy==1.17.0 joblib==1.5.3 threadpoolctl==3.6.0 scikit-learn==1.8.0 pyarrow requests
+
+      - name: Download existing full Round 2 shards
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p research/cache/high_purity_replay_source
+          gh run download 37228155785 -n drh2-shard-0 -D research/cache/high_purity_replay_source/drh2-shard-0
+          gh run download 37228155785 -n drh2-shard-1 -D research/cache/high_purity_replay_source/drh2-shard-1
+          gh run download 37228155785 -n drh2-shard-2 -D research/cache/high_purity_replay_source/drh2-shard-2
+          gh run download 37228155785 -n drh2-shard-3 -D research/cache/high_purity_replay_source/drh2-shard-3
+
+      - name: Replay 2026 full market stream
+        run: python research/replay_high_purity_2026.py
+
+      - name: Show result
+        run: cat research/results/daily_return_harvest/high_purity_runtime/replay_2026/REPLAY.md
+
+      - name: Commit compact replay outputs
+        run: |
+          OUT=research/results/daily_return_harvest/high_purity_runtime/replay_2026
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --sparse -f "$OUT/REPLAY.md" "$OUT/metrics.json" "$OUT/full_stream_signal_onsets.csv" "$OUT/trade_log.csv"
+          if git diff --cached --quiet; then
+            echo "No replay output changes"
+            exit 0
+          fi
+          git commit -m "Add 2026 high-purity portfolio replay results"
+          for attempt in 1 2 3; do
+            if git push; then exit 0; fi
+            git pull --rebase origin master
+          done
+          exit 1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: high-purity-portfolio-replay-2026
+          path: research/results/daily_return_harvest/high_purity_runtime/replay_2026/
+          retention-days: 30
