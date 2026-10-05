@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 # Rebuilds the frozen research-only A/B/C classifier artifacts.
-# IMPORTANT: preserve the original stage-3 shard/partition row order used during discovery.
-# Source artifacts are the retained outputs from staged run 37243430582.
+# IMPORTANT: preserve the original stage-3 shard/partition row order and float32 model matrix used during discovery.
 
 import json
 import pickle
@@ -25,12 +24,8 @@ CONF = "CONFIRMATION_2026"
 TRAIN_CUTOFF = pd.Timestamp("2023-11-01", tz="UTC")
 
 CONSTRUCTED_TYPES = [
-    "WINNER_EVENT",
-    "HARD_NEGATIVE",
-    "SAME_COIN_RANDOM",
-    "SAME_TIME_CONTROL",
+    "WINNER_EVENT", "HARD_NEGATIVE", "SAME_COIN_RANDOM", "SAME_TIME_CONTROL",
 ]
-
 EXPECTED = {
     DISC: {"signals": 975, "winners": 938},
     VAL: {"signals": 645, "winners": 587},
@@ -45,7 +40,6 @@ def source_parts() -> tuple[list[Path], str]:
         shard_parts.extend(sorted(d.glob("samples_part_*.parquet")))
     if shard_parts:
         return shard_parts, "stage3-canonical-shards-0-3"
-
     parts = sorted(CANONICAL.glob("part_*.parquet"))
     if parts:
         return parts, "consolidated-dataset-fallback"
@@ -53,7 +47,8 @@ def source_parts() -> tuple[list[Path], str]:
 
 
 def load_samples(a_features: list[str], bc_features: list[str]) -> tuple[pd.DataFrame, str]:
-    cols = list(dict.fromkeys(["sample_type", "split", "decision_time"] + a_features + bc_features))
+    model_features = list(dict.fromkeys(a_features + bc_features))
+    cols = ["sample_type", "split", "decision_time"] + model_features
     parts, source = source_parts()
     frames = [pd.read_parquet(path, columns=cols) for path in parts]
     df = pd.concat(frames, ignore_index=True)
@@ -69,7 +64,11 @@ def load_samples(a_features: list[str], bc_features: list[str]) -> tuple[pd.Data
     else:
         df["decision_time"] = df["decision_time"].dt.tz_convert("UTC")
 
-    print(f"Loaded {len(df)} rows from {len(parts)} partitions using source={source}")
+    # Exact discovery-matrix behaviour from full_selected_matrix.py.
+    for col in model_features:
+        df[col] = pd.to_numeric(df[col], errors="coerce").astype(np.float32)
+
+    print(f"Loaded {len(df)} rows from {len(parts)} partitions using source={source}; model dtype=float32")
     return df, source
 
 
@@ -77,7 +76,6 @@ def fit_models(df: pd.DataFrame, spec: dict):
     a_features = spec["A_FEATURES"]
     bc_features = spec["BC_FEATURES"]
     th = spec["thresholds"]
-
     base = df[df["sample_type"].isin(CONSTRUCTED_TYPES)].copy()
     base["iswin"] = (base["sample_type"] == "WINNER_EVENT").astype(np.int8)
 
@@ -90,8 +88,7 @@ def fit_models(df: pd.DataFrame, spec: dict):
     base["score_a"] = family_a.predict_proba(base[a_features])[:, 1]
 
     train_b = base[
-        (base["split"] == DISC)
-        & (base["decision_time"] < TRAIN_CUTOFF)
+        (base["split"] == DISC) & (base["decision_time"] < TRAIN_CUTOFF)
         & (base["score_a"] < th["A"])
     ]
     family_b = HistGradientBoostingClassifier(
@@ -104,10 +101,8 @@ def fit_models(df: pd.DataFrame, spec: dict):
     covered_a = base["score_a"] >= th["A"]
     covered_b = (~covered_a) & (base["score_b"] >= th["B"])
     train_c = base[
-        (base["split"] == DISC)
-        & (base["decision_time"] < TRAIN_CUTOFF)
-        & (~covered_a)
-        & (~covered_b)
+        (base["split"] == DISC) & (base["decision_time"] < TRAIN_CUTOFF)
+        & (~covered_a) & (~covered_b)
     ]
     family_c = HistGradientBoostingClassifier(
         max_iter=320, learning_rate=0.05, max_leaf_nodes=15,
@@ -115,7 +110,6 @@ def fit_models(df: pd.DataFrame, spec: dict):
     )
     family_c.fit(train_c[bc_features], train_c["iswin"])
     base["score_c"] = family_c.predict_proba(base[bc_features])[:, 1]
-
     return base, family_a, family_b, family_c
 
 
@@ -125,25 +119,18 @@ def verify(base: pd.DataFrame, thresholds: dict) -> dict:
     c = (~a) & (~b) & (base["score_c"].to_numpy() >= thresholds["C"])
     signal = a | b | c
     win = base["iswin"].to_numpy().astype(bool)
-
-    summary = {}
-    mismatches = []
+    summary, mismatches = {}, []
     for split, expected in EXPECTED.items():
         m = base["split"].to_numpy() == split
         signals = int((m & signal).sum())
         winners = int((m & signal & win).sum())
         summary[split] = {
-            "signals": signals,
-            "winners": winners,
+            "signals": signals, "winners": winners,
             "precision": winners / signals if signals else None,
-            "family_a": int((m & a).sum()),
-            "family_b": int((m & b).sum()),
-            "family_c": int((m & c).sum()),
+            "family_a": int((m & a).sum()), "family_b": int((m & b).sum()), "family_c": int((m & c).sum()),
         }
         if signals != expected["signals"] or winners != expected["winners"]:
-            mismatches.append(
-                f"{split}: got {signals}/{winners}, expected {expected['signals']}/{expected['winners']}"
-            )
+            mismatches.append(f"{split}: got {signals}/{winners}, expected {expected['signals']}/{expected['winners']}")
     print(json.dumps(summary, indent=2))
     if mismatches:
         raise RuntimeError("Model integrity check failed: " + "; ".join(mismatches))
@@ -165,13 +152,10 @@ def main():
         pickle.dump((family_c, spec["BC_FEATURES"]), f, protocol=pickle.HIGHEST_PROTOCOL)
 
     manifest = {
-        "model_set": "high-purity-abc-v1",
-        "dataset_version": "drh2-event-v1-20261004",
-        "schema_hash": "8a9a01e2478311b051a1",
-        "training_source": source,
-        "sklearn_version": sklearn.__version__,
-        "training_cutoff_utc": str(TRAIN_CUTOFF),
-        "thresholds": spec["thresholds"],
+        "model_set": "high-purity-abc-v1", "dataset_version": "drh2-event-v1-20261004",
+        "schema_hash": "8a9a01e2478311b051a1", "training_source": source,
+        "model_matrix_dtype": "float32", "sklearn_version": sklearn.__version__,
+        "training_cutoff_utc": str(TRAIN_CUTOFF), "thresholds": spec["thresholds"],
         "verification": summary,
         "note": "Research-only frozen model artifacts. Runtime must not retrain.",
     }
