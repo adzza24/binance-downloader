@@ -1,0 +1,80 @@
+name: BTC Reversal State Engine 2024-2025
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - 'research/btc_reversal_state_engine_2024_2025.py'
+      - '.github/workflows/btc-reversal-state-engine-2024-2025.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  state-engine:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            research/btc_reversal_state_engine_2024_2025.py
+            research/btc_forensic_transition_2024.py
+            research/binance_data.py
+            research/daily_return_harvest_round2_event_discovery.py
+            research/early_breakout_round1.py
+            research/round3a_exit_architecture.py
+            research/round2b_validation.py
+            research/backtest.py
+            research/config.json
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Restore Binance cache
+        uses: actions/cache/restore@v4
+        with:
+          path: research/cache/binance
+          key: btc-reversal-state-engine-${{ runner.os }}
+          restore-keys: |
+            daily-return-harvest-round2-${{ runner.os }}-
+            daily-return-harvest-round1-${{ runner.os }}-
+            drh2-binance-shard-0-${{ runner.os }}
+
+      - name: Install research environment
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas==3.0.6 numpy==2.3.5 scipy==1.17.0 scikit-learn==1.8.0 pyarrow==25.0.1 numba==0.63.1 lightgbm tabulate requests
+
+      - name: Syntax check
+        run: python -m py_compile research/btc_reversal_state_engine_2024_2025.py
+
+      - name: Run state engine and portfolio replay
+        run: python research/btc_reversal_state_engine_2024_2025.py
+
+      - name: Show analysis
+        run: cat research/results/daily_return_harvest/btc_reversal_state_engine_2024_2025/ANALYSIS.md
+
+      - name: Commit compact research outputs
+        run: |
+          OUT=research/results/daily_return_harvest/btc_reversal_state_engine_2024_2025
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --sparse -f "$OUT"
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Add BTC reversal state engine results"
+          for attempt in 1 2 3; do
+            if git push; then exit 0; fi
+            git pull --rebase origin master
+          done
+          exit 1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: btc-reversal-state-engine-2024-2025
+          path: research/results/daily_return_harvest/btc_reversal_state_engine_2024_2025/
+          retention-days: 90
