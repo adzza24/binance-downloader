@@ -1,0 +1,93 @@
+name: BTC Capitulation Fingerprint Forward 2025
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - 'research/btc_capitulation_fingerprint_forward_2025.py'
+      - '.github/workflows/btc-capitulation-fingerprint-forward-2025.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  fingerprint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            research/btc_capitulation_fingerprint_forward_2025.py
+            research/btc_forensic_transition_2024.py
+            research/binance_data.py
+            research/daily_return_harvest_round2_event_discovery.py
+            research/early_breakout_round1.py
+            research/round3a_exit_architecture.py
+            research/round2b_validation.py
+            research/backtest.py
+            research/config.json
+            research/results/daily_return_harvest/btc_w3_matched_lookalikes_tight_2024/top_unique_trajectory_features.csv
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Restore Binance cache
+        uses: actions/cache/restore@v4
+        with:
+          path: research/cache/binance
+          key: btc-capitulation-forward-2025-${{ runner.os }}
+          restore-keys: |
+            drh2-binance-shard-0-${{ runner.os }}
+            daily-return-harvest-round2-${{ runner.os }}-
+            daily-return-harvest-round1-${{ runner.os }}-
+            explosive-move-entry-round3-${{ runner.os }}-
+
+      - name: Install research environment
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas==3.0.6 numpy==2.3.5 scipy==1.17.0 scikit-learn==1.8.0 pyarrow==25.0.1 numba==0.63.1 tabulate requests joblib
+
+      - name: Download preserved BTC 2024 forensic artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p research/input/btc_forensic_2024
+          gh run download 37451123723 --repo adzza24/binance-downloader --name btc-forensic-transition-2024-full --dir research/input/btc_forensic_2024
+
+      - name: Syntax check
+        run: python -m py_compile research/btc_capitulation_fingerprint_forward_2025.py
+
+      - name: Run frozen fingerprint and 2025 forward test
+        run: python research/btc_capitulation_fingerprint_forward_2025.py
+
+      - name: Show analysis
+        run: cat research/results/daily_return_harvest/btc_capitulation_fingerprint_forward_2025/ANALYSIS.md
+
+      - name: Commit compact research outputs
+        run: |
+          OUT=research/results/daily_return_harvest/btc_capitulation_fingerprint_forward_2025
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --sparse -f \
+            "$OUT/ANALYSIS.md" "$OUT/summary.json" "$OUT/fingerprint_manifest_frozen_before_2025.json" \
+            "$OUT/fingerprint_features.csv" "$OUT/fingerprint_2024_oof_frontier.csv" \
+            "$OUT/oco_grid_2024.csv" "$OUT/forward_2025_summary.csv" "$OUT/forward_2025_signals.csv"
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Add BTC capitulation fingerprint 2025 forward results"
+          for attempt in 1 2 3; do
+            if git push; then exit 0; fi
+            git pull --rebase origin master
+          done
+          exit 1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: btc-capitulation-fingerprint-forward-2025-full
+          path: research/results/daily_return_harvest/btc_capitulation_fingerprint_forward_2025/
+          retention-days: 90
