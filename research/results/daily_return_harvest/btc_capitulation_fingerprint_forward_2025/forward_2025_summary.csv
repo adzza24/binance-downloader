@@ -1,0 +1,2 @@
+signals,signals_per_day,w3_wins,w3_precision,chosen_oco_mean_return,chosen_oco_geomean_return,chosen_oco_positive_rate,chosen_oco_target_rate,chosen_oco_stop_rate,original_3_2_mean_return,original_3_2_geomean_return,original_3_2_positive_rate,original_3_2_target_rate,original_3_2_stop_rate
+37,0.10336398556629031,6,0.16216216216216217,-0.0035952579557096123,-0.004105519936368762,0.32432432432432434,0.24324324324324326,0.6756756756756757,-0.005535808781636819,-0.005783784346449328,0.2972972972972973,0.2702702702702703,0.7027027027027027
