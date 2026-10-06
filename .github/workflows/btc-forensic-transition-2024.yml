@@ -23,6 +23,9 @@ jobs:
             research/binance_data.py
             research/daily_return_harvest_round2_event_discovery.py
             research/early_breakout_round1.py
+            research/round3a_exit_architecture.py
+            research/round2b_validation.py
+            research/backtest.py
             research/config.json
           sparse-checkout-cone-mode: false
           fetch-depth: 1
