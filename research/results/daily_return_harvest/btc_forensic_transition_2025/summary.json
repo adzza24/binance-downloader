@@ -1,0 +1,39 @@
+{
+  "study": "BTC forensic transition 2025",
+  "status": "RESEARCH ONLY - no live strategy or automation changes",
+  "decision_start": "2025-01-01 00:00:00+00:00",
+  "decision_end": "2025-12-28 23:00:00+00:00",
+  "hours": 8688,
+  "primary_w3_hours": 954,
+  "primary_w3_rate": 0.10980662983425414,
+  "w3_event_anchors": 77,
+  "windows_hours": [
+    24,
+    72,
+    240
+  ],
+  "sequence_channels": [
+    "log_ret",
+    "range_pct",
+    "body_pct",
+    "upper_wick",
+    "lower_wick",
+    "close_location",
+    "volume_rel72",
+    "trades_rel72",
+    "taker_share",
+    "rsi14",
+    "macd_hist_pct",
+    "close_vs_ema24",
+    "atr14_pct",
+    "bb_width",
+    "stoch_k"
+  ],
+  "temporal_input_features": 3564,
+  "2026_touched": false,
+  "cross_year": {
+    "comparable_offset_features": 1054,
+    "same_direction_share_pre_event": 0.6517647058823529,
+    "stable_effect_ge_0_25_both_years": 100
+  }
+}
