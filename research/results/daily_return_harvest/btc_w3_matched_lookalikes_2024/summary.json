@@ -1,0 +1,26 @@
+{
+  "study": "BTC 2024 matched W3 lookalike trajectory comparison",
+  "research_only": true,
+  "2025_2026_touched": false,
+  "winner_events": 108,
+  "controls_per_event": 5,
+  "matched_controls": 540,
+  "matching_features": [
+    "rsi6",
+    "rsi14",
+    "bb_z",
+    "stoch_k",
+    "cci20",
+    "close_vs_ema6",
+    "close_vs_ema12",
+    "close_vs_ema24",
+    "close_vs_vwap24",
+    "macd_hist_pct",
+    "atr14_pct",
+    "log_ret"
+  ],
+  "median_state_distance": 0.47359031052972184,
+  "p90_state_distance": 1.1897754321026794,
+  "max_abs_smd_after": 0.5707133539186425,
+  "median_abs_smd_after": 0.39068679865051004
+}
