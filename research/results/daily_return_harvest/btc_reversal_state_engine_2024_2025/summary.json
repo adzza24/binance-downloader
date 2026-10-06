@@ -1,0 +1,48 @@
+{
+  "study": "BTC dynamic reversal state engine 2024-2025",
+  "status": "RESEARCH ONLY - exploratory/in-sample; no live strategy or automation changes",
+  "primary_variant": "BALANCED",
+  "engine_variants": {
+    "LOOSE": {
+      "setup_min": 3,
+      "transition_min": 2,
+      "fast_min": 1,
+      "total_min": 7
+    },
+    "BALANCED": {
+      "setup_min": 4,
+      "transition_min": 2,
+      "fast_min": 2,
+      "total_min": 9
+    },
+    "STRICT": {
+      "setup_min": 5,
+      "transition_min": 3,
+      "fast_min": 2,
+      "total_min": 11
+    }
+  },
+  "conditions_recomputed_every_hour": true,
+  "sticky_conditions": false,
+  "entry": "next completed-hour open",
+  "oco": "+3% / -2% net of modelled costs; remains open until first touch or end-of-data mark",
+  "fee_rate_each_side": 0.001,
+  "slippage_rate_each_side": 0.0005,
+  "starting_capital": 1000.0,
+  "portfolio": {
+    "starting_capital": 1000.0,
+    "final_balance": 316.50841471772355,
+    "total_return_pct": -68.34915852822765,
+    "max_drawdown_pct": -72.88240786026314,
+    "total_signals": 946,
+    "taken_trades": 387,
+    "missed_signals": 559,
+    "signal_w3_precision": 0.16173361522198731,
+    "taken_w3_precision": 0.15762273901808785,
+    "missed_w3_precision": 0.16457960644007155,
+    "taken_target_rate_eventual": 0.3462532299741602,
+    "taken_stop_rate_eventual": 0.6537467700258398,
+    "median_holding_hours": 14.0
+  },
+  "2026_touched": false
+}
