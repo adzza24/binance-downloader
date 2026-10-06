@@ -1,0 +1,68 @@
+name: BASE +12h Strategy Round 1
+
+on:
+  push:
+    branches: [round-3]
+    paths:
+      - 'research/base12_strategy/round-01/run_round1.py'
+      - '.github/workflows/base12-strategy-round1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  research:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: round-3
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Restore Binance hourly cache
+        uses: actions/cache@v4
+        with:
+          path: research/cache/binance
+          key: base12-round1-${{ runner.os }}-${{ hashFiles('research/base12_strategy/round-01/run_round1.py') }}
+          restore-keys: |
+            explosive-move-real-world-round8-${{ runner.os }}-
+            explosive-move-candidate-evolution-round7-${{ runner.os }}-
+            explosive-move-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pip install pandas numpy scikit-learn numba
+
+      - name: Run Round 1
+        run: python research/base12_strategy/round-01/run_round1.py
+
+      - name: Show analysis
+        if: always()
+        run: cat research/base12_strategy/round-01/ANALYSIS.md || true
+
+      - name: Persist Round 1 results
+        if: always()
+        run: |
+          if [ ! -d research/base12_strategy/round-01 ]; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research/base12_strategy/round-01
+          git diff --cached --quiet && exit 0
+          git commit -m "Store BASE +12h round 1 results"
+          git fetch origin round-3
+          git rebase origin/round-3
+          git push origin HEAD:round-3
+
+      - name: Upload Round 1 artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: base12-strategy-round1
+          path: research/base12_strategy/round-01
+          retention-days: 90
+          if-no-files-found: warn
