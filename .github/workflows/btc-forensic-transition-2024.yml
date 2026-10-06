@@ -1,0 +1,84 @@
+name: BTC 2024 Forensic Transition Study
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - 'research/btc_forensic_transition_2024.py'
+      - '.github/workflows/btc-forensic-transition-2024.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  forensic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            research/btc_forensic_transition_2024.py
+            research/binance_data.py
+            research/daily_return_harvest_round2_event_discovery.py
+            research/early_breakout_round1.py
+            research/config.json
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Restore Binance cache
+        uses: actions/cache/restore@v4
+        with:
+          path: research/cache/binance
+          key: btc-forensic-2024-${{ runner.os }}
+          restore-keys: |
+            drh2-binance-shard-0-${{ runner.os }}
+            daily-return-harvest-round2-${{ runner.os }}-
+            daily-return-harvest-round1-${{ runner.os }}-
+            explosive-move-entry-round3-${{ runner.os }}-
+            explosive-move-entry-round2-${{ runner.os }}-
+
+      - name: Install research environment
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas==3.0.6 numpy==2.4.6 scipy==1.17.0 scikit-learn==1.8.0 lightgbm==4.6.0 pyarrow==25.0.1 numba==0.63.1 tabulate
+
+      - name: Syntax check
+        run: python -m py_compile research/btc_forensic_transition_2024.py
+
+      - name: Run BTC forensic transition study
+        run: python research/btc_forensic_transition_2024.py
+
+      - name: Show analysis
+        run: cat research/results/daily_return_harvest/btc_forensic_transition_2024/ANALYSIS.md
+
+      - name: Commit compact research outputs
+        run: |
+          OUT=research/results/daily_return_harvest/btc_forensic_transition_2024
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --sparse -f \
+            "$OUT/ANALYSIS.md" "$OUT/summary.json" \
+            "$OUT/w3_event_anchors.csv" "$OUT/matched_controls.csv" \
+            "$OUT/aligned_profiles.csv" "$OUT/aligned_divergence.csv" "$OUT/divergence_onset.csv" \
+            "$OUT/univariate_temporal_features.csv" "$OUT/motif_enrichment.csv" \
+            "$OUT/model_metrics.csv" "$OUT/precision_frequency_frontier.csv" "$OUT/model_feature_importance.csv"
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Add BTC 2024 forensic transition results"
+          for attempt in 1 2 3; do
+            if git push; then exit 0; fi
+            git pull --rebase origin master
+          done
+          exit 1
+
+      - name: Upload full forensic dataset
+        uses: actions/upload-artifact@v4
+        with:
+          name: btc-forensic-transition-2024-full
+          path: research/results/daily_return_harvest/btc_forensic_transition_2024/
+          retention-days: 90
