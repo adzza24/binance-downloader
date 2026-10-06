@@ -39,6 +39,8 @@ jobs:
         run: pip install pandas numpy scikit-learn numba
 
       - name: Run Round 1
+        env:
+          PYTHONPATH: research
         run: python research/base12_strategy/round-01/run_round1.py
 
       - name: Show analysis
