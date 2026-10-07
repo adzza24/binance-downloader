@@ -25,5 +25,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: base12-monitor-model
-          path: research/base12_strategy/monitor_export/base_model.joblib
+          path: research/base12_strategy/monitor_export/family_models.joblib
           retention-days: 90
