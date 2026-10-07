@@ -1,0 +1,29 @@
+name: Export BASE Monitor Model
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [round-3]
+    paths:
+      - 'research/base12_strategy/export_monitor_model_simple.py'
+      - '.github/workflows/export-base-monitor-model.yml'
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: round-3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install pandas numpy scikit-learn numba joblib
+      - name: Export frozen BASE model
+        run: PYTHONPATH=research python research/base12_strategy/export_monitor_model_simple.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: base12-monitor-model
+          path: research/base12_strategy/monitor_export/base_model.joblib
+          retention-days: 90
