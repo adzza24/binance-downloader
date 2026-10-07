@@ -1,0 +1,155 @@
+name: BASE +12h Strategy Round 2 Historical Universe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [round-3]
+    paths:
+      - 'research/base12_strategy/round-02/run_round2.py'
+      - '.github/workflows/base12-strategy-round2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: round-3
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pandas numpy scikit-learn numba
+
+      - name: Discover historical Binance USDT universe
+        run: PYTHONPATH=research python research/base12_strategy/round-02/run_round2.py --mode discover
+
+      - name: Upload historical universe
+        uses: actions/upload-artifact@v4
+        with:
+          name: base12-r2-universe
+          path: |
+            research/base12_strategy/round-02/historical_universe.csv
+            research/base12_strategy/round-02/excluded_universe.csv
+            research/base12_strategy/round-02/discovery_failures.csv
+          retention-days: 90
+
+  replay:
+    needs: discover
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: round-3
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Restore existing Binance hourly cache
+        uses: actions/cache/restore@v4
+        with:
+          path: research/cache/binance
+          key: base12-r2-readonly-${{ runner.os }}-${{ matrix.shard }}-${{ hashFiles('research/base12_strategy/round-02/run_round2.py') }}
+          restore-keys: |
+            base12-round1-${{ runner.os }}-
+            explosive-move-real-world-round8-${{ runner.os }}-
+            explosive-move-candidate-evolution-round7-${{ runner.os }}-
+            explosive-move-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pip install pandas numpy scikit-learn numba
+
+      - name: Download historical universe
+        uses: actions/download-artifact@v4
+        with:
+          name: base12-r2-universe
+          path: research/base12_strategy/round-02
+
+      - name: Replay shard
+        run: |
+          mkdir -p /tmp/base12-r2-shard-${{ matrix.shard }}
+          PYTHONPATH=research python research/base12_strategy/round-02/run_round2.py \
+            --mode shard \
+            --shard-index ${{ matrix.shard }} \
+            --total-shards 8 \
+            --out-dir /tmp/base12-r2-shard-${{ matrix.shard }}
+
+      - name: Upload shard output
+        uses: actions/upload-artifact@v4
+        with:
+          name: base12-r2-shard-${{ matrix.shard }}
+          path: /tmp/base12-r2-shard-${{ matrix.shard }}
+          retention-days: 90
+          if-no-files-found: error
+
+  combine:
+    needs: replay
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: round-3
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pandas numpy scikit-learn numba
+
+      - name: Download historical universe
+        uses: actions/download-artifact@v4
+        with:
+          name: base12-r2-universe
+          path: research/base12_strategy/round-02
+
+      - name: Download all replay shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: base12-r2-shard-*
+          path: /tmp/base12-r2-shards
+          merge-multiple: true
+
+      - name: Combine and analyse
+        run: |
+          PYTHONPATH=research python research/base12_strategy/round-02/run_round2.py \
+            --mode combine \
+            --shards-dir /tmp/base12-r2-shards
+
+      - name: Show analysis
+        run: cat research/base12_strategy/round-02/ANALYSIS.md
+
+      - name: Persist Round 2 results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research/base12_strategy/round-02
+          git diff --cached --quiet && exit 0
+          git commit -m "Store BASE +12h Round 2 historical validation results"
+          git fetch origin round-3
+          git rebase origin/round-3
+          git push origin HEAD:round-3
+
+      - name: Upload combined Round 2 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: base12-strategy-round2
+          path: research/base12_strategy/round-02
+          retention-days: 90
