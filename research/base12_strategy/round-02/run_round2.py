@@ -691,14 +691,14 @@ def write_analysis(universe, excluded, years, status, overlap, annual, continuou
     lines += ['', '## Annual-reset 1,000 USDT portfolio', '',
               '| Year | Sleeves | Ending equity | Return | Accepted | Capacity skipped | Max realised DD |',
               '|---|---:|---:|---:|---:|---:|---:|']
-    for r in annual.itertuples(index=False):
-        lines.append(f'| {r.year} | {r.sleeves} | {r.ending_equity:,.2f} | {100*r._asdict()["return"]:.2f}% | {r.accepted_trades} | {r.capacity_skipped_trades} | {100*r.max_realised_drawdown:.2f}% |')
+    for _, r in annual.iterrows():
+        lines.append(f'| {int(r["year"])} | {int(r["sleeves"])} | {r["ending_equity"]:,.2f} | {100*r["return"]:.2f}% | {int(r["accepted_trades"])} | {int(r["capacity_skipped_trades"])} | {100*r["max_realised_drawdown"]:.2f}% |')
 
     lines += ['', '## Continuous 1,000 USDT compound simulation', '',
               '| Sleeves | Ending equity | Total return | Accepted | Capacity skipped | Max realised DD |',
               '|---:|---:|---:|---:|---:|---:|']
-    for r in continuous.itertuples(index=False):
-        lines.append(f'| {r.sleeves} | {r.ending_equity:,.2f} | {100*r._asdict()["return"]:.2f}% | {r.accepted_trades} | {r.capacity_skipped_trades} | {100*r.max_realised_drawdown:.2f}% |')
+    for _, r in continuous.iterrows():
+        lines.append(f'| {int(r["sleeves"])} | {r["ending_equity"]:,.2f} | {100*r["return"]:.2f}% | {int(r["accepted_trades"])} | {int(r["capacity_skipped_trades"])} | {100*r["max_realised_drawdown"]:.2f}% |')
 
     lines += ['', '## Interpretation guardrails', '',
               '- This test reduces current-symbol survivorship bias by discovering the universe from historical Binance Vision archives, including symbols no longer currently listed.',
