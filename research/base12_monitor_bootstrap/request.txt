@@ -1,1 +1,1 @@
-2026-10-08 base12 bootstrap top 200 by Binance 24h USDT quote volume; omit previously initialized symbols; output new rows only; do not modify live rules.
+2026-10-08 rerun BASE12 top200 bootstrap after excluding all USD stable bases and tokenised equities; skip existing 99 symbols and output only new rows. Frozen model/core unchanged.
