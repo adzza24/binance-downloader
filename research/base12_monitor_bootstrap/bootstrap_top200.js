@@ -13,8 +13,8 @@ for(const [fam,threshold] of Object.entries(CORE.FAMILY_THRESHOLDS)) {
   if(pack.thresholds[fam]!==threshold||pack.models[fam].trees.length!==350) throw Error("Frozen model shape/threshold mismatch: "+fam);
 }
 const existing=new Set(fs.readFileSync(path.join(ROOT,"existing_symbols.txt"),"utf8").split(/\s+/).filter(Boolean));
-const stable=new Set(["USDC","FDUSD","TUSD","USDP","DAI","BUSD","EUR","EURI","AEUR","TRY","BRL","GBP","AUD","UAH","RUB","BIDR","IDRT","NGN","ZAR","VAI","UST","USTC"]);
-const eq=/^(?:AAPL|TSLA|AMZN|NVDA|META|GOOGL|GOOG|MSFT|MSTR|COIN|SPY|QQQ|HOOD|PLTR|NFLX|GME|PYPL|BE)$/;
+const stable=new Set(["USDC","FDUSD","TUSD","USDP","DAI","BUSD","EUR","EURI","AEUR","TRY","BRL","GBP","AUD","UAH","RUB","BIDR","IDRT","NGN","ZAR","VAI","UST","USTC","USD1","RLUSD","XUSD","BFUSD","USDE","USDD","USDY","USDF","USDZ","USDG","USDS","USDJ","USDX","USDO","USDN"]);
+const eq=/^(?:AAPL|TSLA|AMZN|NVDA|META|GOOGL|GOOG|MSFT|MSTR|COIN|SPY|QQQ|HOOD|PLTR|NFLX|GME|PYPL|BE|SNDK|SPC|CRCL|SNX|KORU|SOXL|SOXS|INTC|AVGO|MRVL|TQQQ|AAOI|BABA|NBIS|SPCX|SNDKB|SPCXB|CRCLB|MSTRB|NVDAB|QQQB|SNXX|KORUB|SOXLB|GOOGLB|INTCB|AVGOB|SOXSB|TSLAB|MRVLB|TQQQB|AAOIB|BABAB|NBISB)$/;
 const cols="symbol,shard,state_revision,initialized_utc,last_scanned_hour_utc,last_raw_capitulation_alert_utc,last_raw_base_alert_utc,last_raw_momentum_alert_utc,episode_start_utc,episode_family,episode_open_score,episode_start_price,episode_last_selected_alert_utc,precursor_alert_count,episode_certainty,checkpoint_3h,checkpoint_6h,checkpoint_12h,signal_time_utc,signal_entry_price,signal_emitted,signal_emitted_at_utc,status,last_updated_utc,last_error".split(",");
 const baseUrl=["https://data-api.binance.vision/api/v3","https://api.binance.com/api/v3"];
 const cutoff=Math.floor(Date.now()/H)*H-H;
