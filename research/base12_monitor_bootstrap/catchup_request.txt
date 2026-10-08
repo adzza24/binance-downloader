@@ -1,0 +1,1 @@
+2026-10-08 one-off catch-up of all 231 frozen BASE12 initialized symbols from latest Google Sheets pilot state. No recurring GitHub automation.
