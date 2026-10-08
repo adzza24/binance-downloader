@@ -1,0 +1,51 @@
+name: BASE12 Top-200 Bootstrap (Research, One-off)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [base12-bootstrap-20261008]
+    paths:
+      - 'research/base12_monitor_bootstrap/request.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  bootstrap-top200:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install only frozen-model reading dependencies
+        run: python -m pip install --quiet numpy pandas scikit-learn joblib numba
+      - name: Download previously exported frozen family models (never retrain)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p research/base12_monitor_bootstrap/model_download
+          gh run download 37687822307 --repo adzza24/binance-downloader -n base12-monitor-model --dir research/base12_monitor_bootstrap/model_download
+          test -s research/base12_monitor_bootstrap/model_download/family_models.joblib
+      - name: Convert frozen sklearn models to exact JS inference format and validate prediction equivalence
+        run: |
+          PYTHONPATH=research python research/base12_monitor_bootstrap/export_frozen_json.py \
+            research/base12_monitor_bootstrap/model_download/family_models.joblib \
+            research/base12_monitor_bootstrap/family_models.json
+      - name: Bootstrap missing symbols in top 200 USDT spot volume ranking
+        run: node research/base12_monitor_bootstrap/bootstrap_top200.js
+      - name: Publish only new rows plus coverage/failure report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: base12-top200-bootstrap-candidates
+          path: |
+            research/base12_monitor_bootstrap/output/base12_new_candidates.csv
+            research/base12_monitor_bootstrap/output/bootstrap_report.json
+          retention-days: 30
+          if-no-files-found: warn
