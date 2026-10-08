@@ -1,0 +1,13 @@
+{
+  "kind": "BASE12_ONE_OFF_INCREMENTAL_CATCHUP",
+  "research_only": true,
+  "created_at_utc": "2026-10-08T21:55:05.805Z",
+  "cutoff_utc": "2026-10-08T20:00:00.000Z",
+  "symbols": 231,
+  "succeeded": 203,
+  "failed": [],
+  "unchanged": 28,
+  "new_selected_alerts": 77,
+  "completed_at_utc": "2026-10-08T21:55:34.712Z",
+  "status": "SUCCESS"
+}
