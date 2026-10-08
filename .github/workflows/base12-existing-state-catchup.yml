@@ -1,0 +1,56 @@
+name: BASE12 Existing State Catch-up (One-off Research)
+on:
+  push:
+    branches: [base12-bootstrap-20261008]
+    paths:
+      - 'research/base12_monitor_bootstrap/state_input.csv'
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: base12-bootstrap-20261008
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install frozen model conversion dependencies
+        run: python -m pip install --quiet numpy pandas scikit-learn joblib numba
+      - name: Retrieve previously trained frozen model, do not retrain
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p research/base12_monitor_bootstrap/model_download
+          gh run download 37687822307 --repo adzza24/binance-downloader -n base12-monitor-model --dir research/base12_monitor_bootstrap/model_download
+          test -s research/base12_monitor_bootstrap/model_download/family_models.joblib
+      - name: Convert and validate exact frozen inference format
+        run: |
+          PYTHONPATH=research python research/base12_monitor_bootstrap/export_frozen_json.py research/base12_monitor_bootstrap/model_download/family_models.joblib research/base12_monitor_bootstrap/family_models.json
+      - name: Compute exact incremental updates for existing state
+        run: node research/base12_monitor_bootstrap/incremental_catchup.js
+      - name: Publish independent research results to artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: base12-existing-state-catchup
+          path: |
+            research/base12_monitor_bootstrap/output/state_output.csv
+            research/base12_monitor_bootstrap/output/sync_report.json
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Commit output for exact fetch and verified Sheets merge
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research/base12_monitor_bootstrap/output/state_output.csv research/base12_monitor_bootstrap/output/sync_report.json
+          git diff --staged --quiet || (git commit -m "Record one-off BASE12 existing-state research catch-up" && git push)
