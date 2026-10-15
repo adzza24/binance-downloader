@@ -1,13 +1,13 @@
 {
   "artifact_name": "live-market-snapshot",
-  "artifact_id": 11971600626,
-  "artifact_digest": "f18991660f367ae853402442cc7a0bffc0adabefbd5a311dce99caa3e114c11e",
-  "workflow_run_id": 38731873220,
+  "artifact_id": 11992092458,
+  "artifact_digest": "5209b24c8faab33bac4e24218d63b15948b352d3affdd57d291a231b2d0feb29",
+  "workflow_run_id": 38772448212,
   "workflow_run_attempt": 1,
   "head_sha": "d838890e296a63f98c2062223be08e9611950521",
   "trigger_value": "2026-09-22T10:06:30Z",
-  "snapshot_generated_at": "2026-10-15T12:05:42.248931+00:00",
+  "snapshot_generated_at": "2026-10-15T16:53:33.641409+00:00",
   "snapshot_schema_version": "2",
   "pipeline_status": "OK",
-  "published_at": "2026-10-15T12:05:43.290844+00:00"
+  "published_at": "2026-10-15T16:53:35.025345+00:00"
 }
